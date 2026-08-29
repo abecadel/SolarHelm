@@ -1,0 +1,10 @@
+{
+  "name": "solarhelm-planner",
+  "private": true,
+  "type": "module",
+  "description": "SolarHelm companion planner PWA (no build step; tests via node --test + c8)",
+  "scripts": {
+    "test": "node --test tests/",
+    "coverage": "c8 --check-coverage --lines 100 --functions 100 --statements 100 --include 'js/**/*.js' --exclude 'sw.js' --reporter=text node --test tests/"
+  }
+}
