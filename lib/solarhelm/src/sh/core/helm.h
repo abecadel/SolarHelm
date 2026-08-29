@@ -1,0 +1,76 @@
+// Helm — the SolarHelm orchestrator.
+//
+// One instance owns the whole decision chain for a control tick:
+//
+//   sensor samples -> SafetySupervisor -> ModeManager -> BatteryPowerController
+//                 -> throttle command + telemetry record
+//
+// Helm is hardware-free: it consumes samples and RETURNS the command; the
+// caller (simulator harness or ESP32 firmware) pushes the command into an
+// IThrottleOutput. That keeps this file byte-for-byte identical between
+// desktop and embedded builds.
+//
+// Fail-safe behaviour built in (docs/SAFETY.md):
+//  - constructed in MANUAL with zero command; auto never resumes after boot
+//  - auto activation requires an explicit requestMode() AND healthy sensors
+//  - losing battery data mid-cruise -> forced MANUAL, command 0
+//  - at/below reserve SOC the battery-power target is floored at 0 W
+//  - the returned command is always inside [min,max] config limits
+
+#pragma once
+
+#include <cstdint>
+
+#include "sh/control/mode_manager.h"
+#include "sh/control/power_controller.h"
+#include "sh/core/config.h"
+#include "sh/core/samples.h"
+#include "sh/energy/tracker.h"
+#include "sh/safety/supervisor.h"
+#include "sh/telemetry/telemetry.h"
+
+namespace sh {
+
+struct HelmOutput {
+    // True when SolarHelm is in an automatic mode and its command is valid.
+    // False means MANUAL: the hardware layer must give the physical throttle
+    // authority and drive the automatic output to zero.
+    bool auto_active = false;
+    float motor_cmd_pct = 0.0f;
+    TelemetryRecord telemetry;
+};
+
+class Helm {
+public:
+    // The config must outlive the Helm. An invalid config permanently locks
+    // the Helm in MANUAL (kFaultConfigInvalid is raised every tick).
+    Helm(const ControlConfig& cfg, ITransitionLogger* logger);
+
+    // Explicit user mode request (fail-safe rule: automatic control must be
+    // explicitly activated). Returns false when refused.
+    bool requestMode(Mode mode, uint32_t now_ms);
+
+    // Immediate drop to MANUAL (user override, kill switch sensed, ...).
+    void forceManual(const char* reason, uint32_t now_ms);
+
+    // One control tick: dt_s since the previous step; samples may be stale
+    // or invalid — Helm decides what is trustworthy.
+    HelmOutput step(uint32_t now_ms, float dt_s, const BatterySample& battery,
+                    const SolarSample& solar, const GpsSample& gps);
+
+    Mode mode() const { return modes_.mode(); }
+    bool configValid() const { return config_valid_; }
+    const EnergyTracker& energy() const { return energy_; }
+    void resetDailyCounters() { energy_.reset(); }
+
+private:
+    const ControlConfig& cfg_;
+    bool config_valid_;
+    SafetySupervisor safety_;
+    ModeManager modes_;
+    BatteryPowerController controller_;
+    EnergyTracker energy_;
+    SafetyVerdict last_verdict_;
+};
+
+}  // namespace sh
