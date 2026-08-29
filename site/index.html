@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SolarHelm — energy-aware cruise control for solar-electric boats</title>
+<meta name="description" content="SolarHelm automatically adjusts electric boat propulsion to available solar energy, battery reserve and real-world efficiency.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="app/icon.svg" type="image/svg+xml">
+</head>
+<body>
+<header class="hero">
+  <h1>SOLARHELM</h1>
+  <p class="tag">Energy-aware cruise control for solar-electric boats.
+  Instead of holding a fixed speed, SolarHelm holds a fixed <b>battery
+  power</b> — so your boat cruises on exactly the energy the sun provides.</p>
+  <a class="cta primary" href="calculator.html">What could my boat do? →</a>
+  <a class="cta secondary" href="app/">Trip planner app</a>
+  <a class="cta secondary" href="https://github.com/abecadel/SolarHelm">GitHub</a>
+</header>
+<main>
+  <section>
+    <h2>The idea</h2>
+    <p>A conventional cruise control holds speed and lets the battery pick up
+    the difference — until it is empty. SolarHelm inverts this: it targets
+    <b>0&nbsp;W battery power</b> and continuously trims the motor so
+    propulsion follows solar production. Clouds pass, the boat gently slows;
+    the sun returns, it speeds up. The battery stays full for when you
+    actually need it. That is the whole trick — and it is enough to cruise
+    all day, day after day, without shore power.</p>
+    <pre class="diagram">
+ Solar panels ──► MPPT(s) ──►┌──────────────┐──► hotel loads
+                             │ 24V LiFePO4  │
+                             └──────┬───────┘
+                                    │  battery shunt (V, A, SOC)
+                                    ▼
+        SolarHelm ESP32 ──► throttle signal ──► motor controller ──► motor
+        reads: battery power, SOC, PV power, GPS speed
+        goal:  battery power ≈ target (0 W = pure solar cruising)</pre>
+  </section>
+  <section>
+    <h2>What it does</h2>
+    <div class="grid3">
+      <div class="tile"><b>SOLAR mode</b><br>Target battery power 0&nbsp;W.
+        Cruise on sunshine alone; speed floats with the clouds.</div>
+      <div class="tile"><b>SOLAR+ mode</b><br>Allow a configured battery
+        contribution (e.g. −200&nbsp;W) for a bit more speed.</div>
+      <div class="tile"><b>Reserve floor</b><br>At your reserve SOC the
+        controller refuses to consume further battery energy. Latched, with
+        hysteresis, tested.</div>
+      <div class="tile"><b>Fail-safe by design</b><br>Losing the shunt, the
+        GPS or the microcontroller always means: automatic throttle to zero,
+        manual helm has authority. The kill switch never passes through
+        SolarHelm.</div>
+      <div class="tile"><b>Learns your hull</b><br>Logs real Wh/km at every
+        speed and builds your boat's efficiency curve from sea trials.</div>
+      <div class="tile"><b>Plans your trip</b><br>The companion app fetches
+        the solar/wind forecast and predicts range, SOC and arrival energy
+        for the next days.</div>
+    </div>
+  </section>
+  <section>
+    <h2>Simulation-first engineering</h2>
+    <p>The identical C++ control core runs on the desktop simulator, in the
+    unit tests (100% line coverage, enforced in CI) and on the ESP32-S3.
+    Before any hardware existed, the controller already proved — with
+    committed graphs — that it holds battery power at ≈0&nbsp;W through
+    300–1500&nbsp;W solar swings, ramps down safely when the sun vanishes,
+    rises without overshoot, and never violates the SOC reserve.</p>
+    <p><a href="https://github.com/abecadel/SolarHelm/blob/main/docs/SIMULATION_RESULTS.md">
+    See the simulation results →</a></p>
+  </section>
+  <section>
+    <h2>Reference prototype (24 V, ~1.2 kW)</h2>
+    <div class="grid3">
+      <div class="tile"><b>Drive</b><br>Storm N86 trolling motor + Kelly
+        KDS24100E controller (0–5 V throttle input).</div>
+      <div class="tile"><b>Brain</b><br>ESP32-S3 + GP8403 DAC behind a
+        hardware MANUAL/AUTO relay and throttle clamp.</div>
+      <div class="tile"><b>Senses</b><br>Victron SmartShunt (VE.Direct),
+        u-blox GNSS, MPPT telemetry over RS485/VE.Direct.</div>
+    </div>
+    <p class="note">SolarHelm is not coupled to these brands — drivers are
+    plugins; this is simply the cheapest well-documented path to a working
+    boat. Full component research, three costed BOMs in PLN and purchase
+    links live in the
+    <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/BUYING_GUIDE.md">buying guide</a>.</p>
+  </section>
+  <section>
+    <div class="warnbox"><b>Safety first.</b> SolarHelm generates a low-power
+    throttle signal only; it never switches propulsion current. A
+    normally-de-energized relay makes MANUAL the default whenever the
+    controller is unpowered, and an independent kill switch always remains.
+    Read <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/SAFETY.md">docs/SAFETY.md</a>
+    before wiring anything.</div>
+  </section>
+</main>
+<footer>SolarHelm — open source (MIT). Built simulation-first; sea trials to
+follow. <a href="https://github.com/abecadel/SolarHelm">github.com/abecadel/SolarHelm</a></footer>
+</body>
+</html>

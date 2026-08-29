@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SolarHelm feasibility &amp; cost calculator</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="app/icon.svg" type="image/svg+xml">
+</head>
+<body>
+<header class="hero">
+  <h1>WHAT COULD MY BOAT DO?</h1>
+  <p class="tag">Pick a boat class, a solar array and a battery — see the
+  cruising speed, daily range and build cost of a SolarHelm conversion.</p>
+  <a class="cta secondary" href="index.html">← SolarHelm</a>
+  <a class="cta secondary" href="app/">Trip planner app</a>
+</header>
+<main>
+  <section>
+    <div class="form-grid">
+      <div><label for="boat-class">Boat class</label>
+        <select id="boat-class"></select></div>
+      <div><label for="pv-wp">Solar array [Wp]</label>
+        <input id="pv-wp" type="number" min="100" step="50" value="900"></div>
+      <div><label for="battery-kwh">Battery [kWh]</label>
+        <input id="battery-kwh" type="number" min="0.5" step="0.1"
+               value="2.56"></div>
+      <div><label for="hotel-w">Hotel load [W]</label>
+        <input id="hotel-w" type="number" min="0" step="10" value="60"></div>
+    </div>
+    <div id="results"></div>
+  </section>
+  <section>
+    <p class="note">Model: clear June day at Split (43.5°N), the reference
+    hull efficiency curve scaled by boat class, 78% PV system derating and a
+    20% battery reserve. Estimates only — a real hull differs; SolarHelm
+    measures yours during sea trials.</p>
+  </section>
+</main>
+<footer><a href="https://github.com/abecadel/SolarHelm">github.com/abecadel/SolarHelm</a></footer>
+<script type="module" src="app/js/calc_main.js"></script>
+</body>
+</html>
