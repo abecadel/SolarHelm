@@ -17,7 +17,10 @@ drivers/
               100% line coverage with synthesized protocol frames
               (tests/test_vedirect.cpp); the ESP32 UART binding is the
               remaining Milestone-2 hardware step.
-  gps/        NMEA 0183 (RMC/VTG) parser + u-blox config -> IGps
+  gps/        ✅ IMPLEMENTED: NMEA 0183 parser (RMC/VTG/GGA, XOR
+              checksum, any talker, fixed buffers) + GpsMonitor (IGps)
+              using Doppler SOG. 100% coverage (tests/test_nmea.cpp).
+              Remaining: ESP32 UART binding + u-blox 5-10 Hz config.
   throttle/   GP8403 (DFR0971) I2C DAC -> IThrottleOutput (0-5 V)
               later: VescThrottle (UART), CanThrottle (TWAI), PwmThrottle
   mppt/       EPEVER Modbus RTU over RS485 -> ISolarMonitor

@@ -14,8 +14,9 @@ website with feasibility calculator, CI + Pages deployment.
 - ✅ `drivers/victron/`: VE.Direct frame parser + checksum + SmartShunt
   and MPPT adapters (desktop-tested to 100% coverage with synthesized
   frames, HEX-frame tolerant). Remaining: the ESP32 UART binding.
-- `drivers/gps/`: NMEA RMC/VTG parser (desktop-testable), u-blox UART
-  config for 5 Hz.
+- ✅ `drivers/gps/`: NMEA 0183 parser (RMC/VTG/GGA, XOR checksum,
+  any talker) + GpsMonitor adapter, desktop-tested to 100% coverage.
+  Remaining: ESP32 UART binding + u-blox 5-10 Hz configuration.
 - `drivers/throttle/`: GP8403 I2C driver implementing `IThrottleOutput`
   (power-on-zero verified with a meter).
 - MANUAL/AUTO input, AUTO-assert heartbeat output, watchdogs enabled.
