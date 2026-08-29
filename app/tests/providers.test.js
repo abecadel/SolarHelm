@@ -2,16 +2,22 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  makeProviderStats,
+  recordProviderSample,
+} from '../js/provider_stats.js';
+import {
   MARINE_BASE,
   PROVIDER_REGISTRY,
   buildMarineUrl,
   buildWindUrl,
   coverageScore,
+  getRouteEnvironment,
   getVoyageEnvironment,
   kMaxPlausibleCurrentMs,
   parseMarine,
   parseWind,
   providersFor,
+  routeSamplePoints,
 } from '../js/providers.js';
 import { marinePayload, windPayload } from './helpers.js';
 
@@ -163,6 +169,83 @@ test('getVoyageEnvironment keeps live wind when only marine is down',
   assert.equal(env.sources.waves.id, 'none');
   assert.equal(env.sources.currents.id, 'none');
   assert.equal(env.hours[12].waveHsM, 0);
+});
+
+test('routeSamplePoints: one point for short routes, spread for long ones',
+     () => {
+  assert.deepEqual(routeSamplePoints([]), { points: [], segToPoint: [] });
+  const short = [
+    { lat: 43.5, lon: 16.4, lengthKm: 2 },
+    { lat: 43.52, lon: 16.4, lengthKm: 2 },
+  ];
+  const one = routeSamplePoints(short);
+  assert.equal(one.points.length, 1);
+  assert.deepEqual(one.segToPoint, [0, 0]);
+
+  // ~167 km straight line -> multiple sample points, each segment mapped
+  // to its nearest one, in order.
+  const long = [];
+  for (let i = 0; i < 84; i++) {
+    long.push({ lat: 43.5 + i * 0.018, lon: 16.4, lengthKm: 2 });
+  }
+  const multi = routeSamplePoints(long);
+  assert.ok(multi.points.length >= 3 && multi.points.length <= 4);
+  assert.equal(multi.segToPoint[0], 0);
+  assert.equal(multi.segToPoint[83], multi.points.length - 1);
+  for (let i = 1; i < multi.segToPoint.length; i++) {
+    assert.ok(multi.segToPoint[i] >= multi.segToPoint[i - 1]);
+  }
+});
+
+test('routeSamplePoints dedupes samples landing on the same segment', () => {
+  const coarse = [
+    { lat: 0, lon: 0, lengthKm: 30 },
+    { lat: 0.01, lon: 0, lengthKm: 30 },
+  ];
+  const r = routeSamplePoints(coarse);
+  assert.equal(r.points.length, 2); // 0 km and 30 km; 50 km dedupes
+  assert.deepEqual(r.segToPoint, [0, 1]);
+});
+
+test('getRouteEnvironment aggregates coverage pessimistically', async () => {
+  const long = [];
+  for (let i = 0; i < 84; i++) {
+    long.push({ lat: 43.5 + i * 0.018, lon: 16.4, lengthKm: 2 });
+  }
+  let marineCalls = 0;
+  // The marine API "fails" for the northern half of the route only.
+  const fetchImpl = async (url) => {
+    if (!url.includes('marine')) return okJson(windPayload(1))();
+    marineCalls += 1;
+    const lat = parseFloat(url.match(/latitude=([0-9.]+)/)[1]);
+    if (lat > 44.2) return httpError(503)();
+    return okJson(marinePayload(1))();
+  };
+  const env = await getRouteEnvironment(long, START, 1, fetchImpl);
+  assert.equal(env.envs.length, env.segToPoint[83] + 1);
+  assert.ok(marineCalls >= 3);
+  // Southern segments still carry live waves...
+  assert.equal(env.envs[0].sources.waves.id, 'open-meteo-marine');
+  // ...but the aggregated verdict reports the worst point on the route.
+  assert.equal(env.sources.waves.id, 'none');
+  assert.equal(env.coverage.perVar.waves.label, 'NONE');
+  assert.equal(env.sources.wind.id, 'open-meteo-weather');
+});
+
+test('getVoyageEnvironment shades confidence by provider history',
+     async () => {
+  const stats = makeProviderStats();
+  for (let i = 0; i < 12; i++) {
+    // Historically the wind forecast has been off by a full 3 m/s.
+    recordProviderSample(stats, 'open-meteo-weather', 'wind', 3, 0);
+  }
+  const env = await getVoyageEnvironment(43.5, 16.4, START, 1,
+      dispatchFetch({ windResp: okJson(windPayload(1)),
+                      marineResp: okJson(marinePayload(1)) }), stats);
+  assert.ok(Math.abs(env.sources.wind.confidence - 0.45) < 1e-9);
+  assert.equal(env.coverage.perVar.wind.label, 'LOW');
+  // Variables with no history keep their static confidence.
+  assert.equal(env.sources.waves.confidence, 0.9);
 });
 
 test('coverageScore labels each confidence band', () => {

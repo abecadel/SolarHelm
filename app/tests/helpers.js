@@ -99,6 +99,21 @@ export function windPayload(days = 1) {
   return p;
 }
 
+/** A SolarHelm telemetry CSV with steady 90 s cruise blocks at the given
+ *  [speedKmh, powerW] settings (1 Hz rows; matches sh::telemetryCsvHeader
+ *  column names the learner needs). */
+export function telemetryCsv(settings) {
+  const lines = ['timestamp_ms,speed_kmh,motor_estimated_power_w'];
+  let t = 0;
+  for (const [v, p] of settings) {
+    for (let s = 0; s < 90; s++) {
+      lines.push(`${t * 1000},${v},${p}`);
+      t += 1;
+    }
+  }
+  return lines.join('\n');
+}
+
 /** A plausible Open-Meteo Marine hourly payload for `days` days. */
 export function marinePayload(days = 1, { currentKmh = 1.8 } = {}) {
   const time = [];

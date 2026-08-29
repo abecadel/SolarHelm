@@ -118,6 +118,10 @@ export const DEFAULT_PLAN_OPTIONS = {
   requiredArrivalSocPct: 30,
   objective: 'maxSoc', // 'maxSoc' | 'earliest'
   powerFractions: [0.2, 0.35, 0.5, 0.65, 0.85, 1.0],
+  // Optional (segment, index) -> multiplier from geographic residual
+  // learning: >1 means the boat historically needs more power here, so
+  // less of the drawn power turns into speed.
+  segPowerFactor: null,
 };
 
 /**
@@ -164,8 +168,11 @@ export function planVoyage(vessel, segments, envAt, departTime, options) {
 
       if (s === S) continue; // destination: nothing further to expand
 
+      const geoFactor =
+          opt.segPowerFactor ? opt.segPowerFactor(segments[s], s) : 1.0;
       for (const powerW of powers) {
-        const stw = solveStwKmh(vessel, powerW, env, segments[s].bearing);
+        const stw = solveStwKmh(vessel, powerW / geoFactor, env,
+                                segments[s].bearing);
         const sog = groundSpeedKmh(stw, segments[s].bearing, env.currentMs,
                                    env.currentDirDeg);
         if (sog < 0.3) continue; // cannot make way against the water

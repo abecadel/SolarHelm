@@ -152,6 +152,8 @@ The planner is **advisory only** — it never commands the throttle.
 | JSON parsing (C++) | minimal schema-specific parser | a general JSON lib is dead weight on the MCU and in review |
 | Charts (app) | hand-rolled SVG strings | testable as pure functions; no chart library, no build step |
 | Coverage | 100 % lines, gcovr (C++) + c8 (JS), CI-gated | see `tools/check_coverage.sh` header for the two documented exclusions |
+| Phone↔boat link | SoftAP + HTTP/1.1 JSON polling (`GET /telemetry`, `POST /remote`), not WebSocket | the Arduino core's WebServer needs no external library; browsers speak it from a PWA via `fetch`; 1 Hz polling is plenty for an advisory link, and REMOTE safety never depends on the link anyway (10 s staleness degrades to SOLAR in the core). Revisit (WebSocket/SSE) only if polling proves too chatty on the water |
+| Link protocol logic | portable `sh/net/applink` (JSON serializer + strict `target_w` parser), firmware only moves bytes | keeps the phone-facing attack/failure surface inside the 100 % desktop-tested gate |
 
 ## Milestones
 

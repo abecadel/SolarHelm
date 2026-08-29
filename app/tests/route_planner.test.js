@@ -170,6 +170,19 @@ test('planVoyage never plans through the reserve floor', () => {
   assert.equal(r.feasible, false);
 });
 
+test('planVoyage: a geographic power penalty costs SOC or time', () => {
+  const dim = { ...CALM, ghiWm2: 200 };
+  const base = planVoyage(VESSEL, ROUTE, () => dim, DEPART, { windowH: 12 });
+  const penalized = planVoyage(VESSEL, ROUTE, () => dim, DEPART,
+                               { windowH: 12,
+                                 segPowerFactor: () => 1.3 });
+  assert.equal(penalized.feasible, true);
+  // 30% of drawn power lost to the local penalty: strictly worse plan.
+  assert.ok(penalized.summary.arrivalSocPct <= base.summary.arrivalSocPct);
+  assert.ok(penalized.summary.arrivalTimeMs >= base.summary.arrivalTimeMs ||
+            penalized.summary.arrivalSocPct < base.summary.arrivalSocPct);
+});
+
 test('arrivalSocQuantiles brackets the nominal arrival SOC', () => {
   // Overcast so the boat arrives below 100% and both bounds have room.
   const dim = { ...CALM, ghiWm2: 200 };

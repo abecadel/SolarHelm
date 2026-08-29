@@ -1,14 +1,23 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { VESSEL_STORAGE_KEY } from '../js/vessel_store.js';
 import {
+  applyVoyageLearning,
   envAtFactory,
   initVoyage,
   parseWaypoints,
   runVoyage,
   voyageHtml,
 } from '../js/voyage_ui.js';
-import { fire, makeDoc, marinePayload, windPayload } from './helpers.js';
+import {
+  fire,
+  makeDoc,
+  makeStorage,
+  marinePayload,
+  telemetryCsv,
+  windPayload,
+} from './helpers.js';
 
 const PROFILE = {
   hull_efficiency_curve_kmh_whkm: [[4, 50], [6, 80], [8, 120]],
@@ -36,7 +45,7 @@ function voyageDeps(values = {}, fetchImpl = liveFetch()) {
     waypoints: WAYPOINTS, objective: 'maxSoc', soc: '90', reserve: '25',
     ...values,
   });
-  return { doc, fetchImpl, now: () => NOW };
+  return { doc, fetchImpl, now: () => NOW, storage: makeStorage() };
 }
 
 test('parseWaypoints reads lines, comments and the anchor flag', () => {
@@ -53,24 +62,43 @@ test('parseWaypoints rejects garbage and one-point routes', () => {
   assert.equal(parseWaypoints('43.5, 16.4\nnot,numbers'), null);
 });
 
-test('envAtFactory offsets by departure time and clamps to the series', () => {
+function hoursSeries(scale) {
   const hours = [];
   for (let h = 0; h < 24; h++) {
-    hours.push({ time: new Date(Date.UTC(2026, 5, 21, h)), ghiWm2: h });
+    hours.push({ time: new Date(Date.UTC(2026, 5, 21, h)),
+                 ghiWm2: h * scale });
   }
-  const envAt = envAtFactory(hours, NOW); // 12 h into the series
+  return hours;
+}
+
+test('envAtFactory offsets by departure time and clamps to the series', () => {
+  const routeEnv = { envs: [{ hours: hoursSeries(1) }], segToPoint: [0] };
+  const envAt = envAtFactory(routeEnv, NOW); // 12 h into the series
   assert.equal(envAt(0, 0).ghiWm2, 12);
   assert.equal(envAt(0, 3).ghiWm2, 15);
   assert.equal(envAt(0, 100).ghiWm2, 23);  // clamps high
   assert.equal(envAt(0, -100).ghiWm2, 0);  // clamps low
 });
 
+test('envAtFactory routes each segment to its own sample point', () => {
+  const routeEnv = {
+    envs: [{ hours: hoursSeries(1) }, { hours: hoursSeries(10) }],
+    segToPoint: [0, 1],
+  };
+  const envAt = envAtFactory(routeEnv, NOW);
+  assert.equal(envAt(0, 0).ghiWm2, 12);
+  assert.equal(envAt(1, 0).ghiWm2, 120);
+  assert.equal(envAt(99, 0).ghiWm2, 12); // unknown segment: first point
+});
+
 test('envAtFactory yields a dead-calm environment for an empty series', () => {
-  const envAt = envAtFactory([], NOW);
-  const e = envAt(0, 5);
-  assert.equal(e.ghiWm2, 0);
-  assert.equal(e.windMs, 0);
-  assert.equal(e.currentMs, 0);
+  for (const routeEnv of [{ envs: [], segToPoint: [] },
+                          { envs: [{ hours: [] }], segToPoint: [0] }]) {
+    const e = envAtFactory(routeEnv, NOW)(0, 5);
+    assert.equal(e.ghiWm2, 0);
+    assert.equal(e.windMs, 0);
+    assert.equal(e.currentMs, 0);
+  }
 });
 
 test('runVoyage plans a live-forecast voyage and renders the verdict',
@@ -147,6 +175,66 @@ test('voyageHtml subsamples a long Pareto row', () => {
   assert.ok(html.includes('SAFE'));
 });
 
+test('applyVoyageLearning updates, persists and reports the vessel model',
+     () => {
+  const deps = voyageDeps();
+  const state = { profile: PROFILE };
+  const log = telemetryCsv([[4, 168], [4, 168], [5, 300], [6, 492],
+                            [7, 756]]);
+  assert.equal(applyVoyageLearning(deps, state, log), true);
+  assert.equal(state.vessel.voyages, 1);
+  assert.ok(deps.storage.getItem(VESSEL_STORAGE_KEY).includes('"curve"'));
+  const status = deps.doc.getElementById('voyage-learn-status').textContent;
+  assert.ok(status.includes('Learned from 4 steady blocks'));
+  // A drift-free log carries no drift warning.
+  assert.ok(!status.includes('DRIFT'));
+
+  // The next voyage plan uses the learned vessel, not the profile seed.
+  const bad = applyVoyageLearning(deps, state, 'garbage');
+  assert.equal(bad, false);
+  assert.ok(deps.doc.getElementById('voyage-learn-status').textContent
+      .includes('Nothing learned'));
+  assert.equal(state.vessel.voyages, 1); // untouched by the failed pass
+});
+
+test('applyVoyageLearning warns about drift in both directions', () => {
+  const deps = voyageDeps();
+  const state = { profile: PROFILE,
+                  vessel: { curve: { b1: 10, b3: 2 }, relErrors: [],
+                            voyages: 0 } };
+  applyVoyageLearning(deps, state, telemetryCsv(
+      [[4, 252], [4, 252], [5, 450], [6, 738], [7, 1134]]));
+  assert.ok(deps.doc.getElementById('voyage-learn-status').textContent
+      .includes('DRIFT'));
+  state.vessel = { curve: { b1: 10, b3: 2 }, relErrors: [], voyages: 0 };
+  applyVoyageLearning(deps, state, telemetryCsv(
+      [[4, 84], [4, 84], [5, 150], [6, 246], [7, 378]]));
+  assert.ok(deps.doc.getElementById('voyage-learn-status').textContent
+      .includes('runs easier'));
+});
+
+test('initVoyage loads the stored vessel and binds the CSV input',
+     async () => {
+  const deps = voyageDeps();
+  const state = { profile: PROFILE };
+  initVoyage(deps, state);
+  assert.ok(state.vessel.curve.b3 > 0); // seeded from the profile
+  const log = telemetryCsv([[4, 168], [4, 168], [5, 300], [6, 492],
+                            [7, 756]]);
+  await fire(deps.doc, 'voyage-csv', 'change',
+             { target: { files: [{ text: async () => log }] } });
+  assert.equal(state.vessel.voyages, 1);
+  // No file selected: a no-op.
+  await fire(deps.doc, 'voyage-csv', 'change', { target: { files: [] } });
+  assert.equal(state.vessel.voyages, 1);
+
+  // A fresh init on the same storage restores the learned model.
+  const deps2 = { ...voyageDeps(), storage: deps.storage };
+  const state2 = { profile: PROFILE };
+  initVoyage(deps2, state2);
+  assert.equal(state2.vessel.voyages, 1);
+});
+
 test('initVoyage binds the button; failures land in the status line',
      async () => {
   const deps = voyageDeps();
@@ -158,6 +246,7 @@ test('initVoyage binds the button; failures land in the status line',
 
   // A broken profile makes runVoyage throw; the catch handler reports it.
   state.profile = null;
+  state.vessel = null;
   await fire(deps.doc, 'voyage-plan', 'click');
   assert.ok(deps.doc.getElementById('voyage-status').textContent
       .includes('Voyage planning failed'));

@@ -13,15 +13,21 @@ website with feasibility calculator, CI + Pages deployment.
 
 - ✅ `drivers/victron/`: VE.Direct frame parser + checksum + SmartShunt
   and MPPT adapters (desktop-tested to 100% coverage with synthesized
-  frames, HEX-frame tolerant). Remaining: the ESP32 UART binding.
+  frames, HEX-frame tolerant).
 - ✅ `drivers/gps/`: NMEA 0183 parser (RMC/VTG/GGA, XOR checksum,
   any talker) + GpsMonitor adapter, desktop-tested to 100% coverage.
-  Remaining: ESP32 UART binding + u-blox 5-10 Hz configuration.
+  Remaining: u-blox 5-10 Hz configuration (u-center or UBX commands).
 - ✅ `drivers/throttle/`: GP8403 AnalogThrottle (register protocol from
-  DFRobot's library source, injected I2C bus, 100% coverage). Remaining:
-  ESP32 Wire binding + power-on-zero verified with a meter.
-- MANUAL/AUTO input, AUTO-assert heartbeat output, watchdogs enabled.
-- Persisted, versioned config in NVS + validation on load.
+  DFRobot's library source, injected I2C bus, 100% coverage).
+- ✅ `sh/net/applink`: telemetry JSON + strict remote-target parser
+  (desktop-tested to 100% coverage) — the phone↔boat protocol core.
+- ✅ Firmware bindings written (`firmware/main.cpp` + `pins.h`):
+  UART pumps → parsers, Wire → DAC, debounced MANUAL/AUTO switch,
+  kill-sense, toggling relay heartbeat, task watchdog, SoftAP HTTP API.
+  Compile-verified in CI; **physically untested — bench gates A1–A7 in
+  docs/HARDWARE_TEST_PLAN.md are the acceptance tests.**
+- Remaining in M2: persisted, versioned config in NVS + validation on
+  load; power-on-zero verified with a meter (gate A1).
 - Target: SolarHelm driving a multimeter from live simulated/replayed
   shunt data. **No propulsion connected.**
 

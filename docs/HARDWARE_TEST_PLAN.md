@@ -8,8 +8,12 @@ docs/SAFETY.md. Wiring: docs/WIRING.md.
 
 Software status feeding this plan: the control core, protection envelope,
 and REMOTE mode are implemented and simulation-tested; the VE.Direct,
-NMEA and GP8403 drivers are implemented with 100 % coverage — **only
-their thin UART/I2C bindings and the physical checks below remain.**
+NMEA and GP8403 drivers are implemented with 100 % coverage, and the
+ESP32 firmware bindings (UART pumps, Wire-backed DAC, heartbeat/switch
+GPIO logic, SoftAP HTTP JSON API — see firmware/main.cpp + firmware/
+pins.h) are **written and compile-verified in CI but physically
+untested: every gate below is the test.** Pin numbers live in
+firmware/pins.h.
 
 ## Order waves
 
@@ -92,8 +96,9 @@ behavior), event logged to flash.
 the DAC drives the meter; run SOLAR mode against a fake "battery power"
 script. *Accept:* meter voltage tracks the simulated surplus as in
 docs/SIMULATION_RESULTS.md; REMOTE mode accepts a target from a laptop
-over the ESP32's SoftAP WebSocket and degrades to SOLAR 10 s after the
-stream stops.
+via `POST /remote {"target_w": N}` on the ESP32's SoftAP HTTP API
+(`GET /telemetry` streams state back) and degrades to SOLAR 10 s after
+the stream stops.
 **Milestone-2 exit:** A1–A7 green ⇒ order Wave 2.
 
 ### Phase B — Motor bench (Milestone 3)

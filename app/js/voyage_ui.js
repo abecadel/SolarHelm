@@ -3,13 +3,20 @@
 // route DP. Same dependency-injection pattern as ui.js so the whole module
 // runs — and is covered — under node with a stub DOM.
 
-import { getVoyageEnvironment } from './providers.js';
+import { geoPowerFactor, loadGeoStore } from './geo_residuals.js';
+import { loadProviderStats } from './provider_stats.js';
+import { getRouteEnvironment } from './providers.js';
 import {
   arrivalSocQuantiles,
   planVoyage,
   segmentRoute,
 } from './route_planner.js';
 import { errorQuantiles, vesselFromProfile } from './vessel_model.js';
+import {
+  learnFromTelemetry,
+  loadVessel,
+  saveVessel,
+} from './vessel_store.js';
 import { assessPlan } from './voyage_safety.js';
 
 /** Parses the waypoint textarea: one "lat, lon[, anchor]" per line.
@@ -31,16 +38,17 @@ export function parseWaypoints(text) {
   return wps.length >= 2 ? wps : null;
 }
 
-/** Adapts an hourly environment series to the planner's envAt(seg, hour)
- *  callback (V1: one series for the whole route — legs are short). */
-export function envAtFactory(hours, departTime) {
-  if (hours.length === 0) {
-    const dead = { ghiWm2: 0, windMs: 0, windDirDeg: 0, waveHsM: 0,
-                   waveDirDeg: 0, currentMs: 0, currentDirDeg: 0 };
-    return () => dead;
-  }
-  const offsetH = (departTime.getTime() - hours[0].time.getTime()) / 3.6e6;
+/** Adapts a per-segment route environment ({envs, segToPoint} from
+ *  getRouteEnvironment) to the planner's envAt(seg, hour) callback. */
+export function envAtFactory(routeEnv, departTime) {
+  const dead = { ghiWm2: 0, windMs: 0, windDirDeg: 0, waveHsM: 0,
+                 waveDirDeg: 0, currentMs: 0, currentDirDeg: 0 };
+  const { envs, segToPoint } = routeEnv;
+  if (envs.length === 0 || envs[0].hours.length === 0) return () => dead;
+  const offsetH =
+      (departTime.getTime() - envs[0].hours[0].time.getTime()) / 3.6e6;
   return (segIdx, hourFloat) => {
+    const hours = envs[segToPoint[segIdx] ?? 0].hours;
     const i = Math.round(offsetH + hourFloat);
     return hours[Math.min(hours.length - 1, Math.max(0, i))];
   };
@@ -107,17 +115,18 @@ export async function runVoyage(deps, state) {
       ? 'earliest' : 'maxSoc';
   const departTime = deps.now();
   const segments = segmentRoute(wps);
-  const mid = wps[Math.floor(wps.length / 2)];
-  const env = await getVoyageEnvironment(mid.lat, mid.lon, departTime, 3,
-                                         deps.fetchImpl);
-  const vessel = vesselFromProfile(state.profile);
+  const env = await getRouteEnvironment(segments, departTime, 3,
+                                        deps.fetchImpl, 4,
+                                        loadProviderStats(deps.storage));
+  const vessel = state.vessel ?? vesselFromProfile(state.profile);
+  const geo = loadGeoStore(deps.storage);
   const opt = {
     objective,
     startSocPct: readNum(doc, 'soc', 90),
     reserveSocPct: readNum(doc, 'reserve', 25),
+    segPowerFactor: (seg) => geoPowerFactor(geo, seg.lat, seg.lon),
   };
-  const result = planVoyage(vessel, segments, envAtFactory(env.hours,
-                                                           departTime),
+  const result = planVoyage(vessel, segments, envAtFactory(env, departTime),
                             departTime, opt);
   const quantiles = errorQuantiles(vessel.relErrors);
   const socQ = result.feasible
@@ -141,13 +150,47 @@ export async function runVoyage(deps, state) {
   return { result, assessment, socQ, env };
 }
 
+/** Applies one telemetry log to the vessel model and reports the outcome
+ *  in #voyage-learn-status. Exposed for tests; bound by initVoyage. */
+export function applyVoyageLearning(deps, state, csvText) {
+  const doc = deps.doc;
+  const vessel = state.vessel ?? vesselFromProfile(state.profile);
+  const out = learnFromTelemetry(vessel, csvText);
+  if (!out.ok) {
+    doc.getElementById('voyage-learn-status').textContent =
+        `Nothing learned: ${out.reason}`;
+    return false;
+  }
+  state.vessel = out.vessel;
+  saveVessel(deps.storage, out.vessel);
+  const r = out.report;
+  const driftNote = r.drift > 0
+      ? ' DRIFT: the boat needs more power than the model - check hull ' +
+        'fouling/prop.'
+      : r.drift < 0 ? ' Drift: the boat runs easier than modelled.' : '';
+  doc.getElementById('voyage-learn-status').textContent =
+      `Learned from ${r.blocks} steady blocks (voyage ` +
+      `#${out.vessel.voyages}). Curve P=${r.curve.b1.toFixed(1)}v+` +
+      `${r.curve.b3.toFixed(2)}v³; error p10..p90 ` +
+      `${(r.quantiles.p10 * 100).toFixed(0)}..` +
+      `${(r.quantiles.p90 * 100).toFixed(0)}%` +
+      `${r.quantiles.calibrated ? ' (calibrated)' : ''}.${driftNote}`;
+  return true;
+}
+
 export function initVoyage(deps, state) {
   const doc = deps.doc;
+  state.vessel = loadVessel(deps.storage, state.profile);
   doc.getElementById('voyage-plan').addEventListener('click', () => {
     doc.getElementById('voyage-status').textContent = 'Planning voyage…';
     return runVoyage(deps, state).catch((err) => {
       doc.getElementById('voyage-status').textContent =
           `Voyage planning failed: ${err}`;
     });
+  });
+  doc.getElementById('voyage-csv').addEventListener('change', async (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) return;
+    applyVoyageLearning(deps, state, await file.text());
   });
 }

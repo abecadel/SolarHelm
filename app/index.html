@@ -66,7 +66,8 @@
             margin-top: 6px; }
   .legend .swatch { display: inline-block; width: 10px; height: 10px;
                     border-radius: 2px; margin-right: 4px; }
-  #profile-name, #curve-status { font-size: .75rem; color: #4a5c6b; }
+  #profile-name, #curve-status, #voyage-learn-status {
+    font-size: .75rem; color: #4a5c6b; }
   footer { font-size: .7rem; color: #7d8fa0; margin-top: 24px; }
 </style>
 </head>
@@ -141,6 +142,10 @@
       <div><label>&nbsp;</label>
         <button id="voyage-plan">Plan voyage</button></div>
     </div>
+    <label for="voyage-csv">Learn from a voyage log (telemetry CSV →
+      refits the hull model, calibrates uncertainty, checks drift)</label>
+    <input id="voyage-csv" type="file" accept=".csv,text/csv">
+    <p id="voyage-learn-status"></p>
     <p id="voyage-status"></p>
     <section id="voyage-summary"></section>
   </fieldset>

@@ -99,13 +99,35 @@ modules, all pure and unit-tested to the same 100 % gate:
   calibrated uncertainty), always rendered with the plan.
 
 The voyage UI (`js/voyage_ui.js`) reads waypoints as `lat, lon[, anchor]`
-lines, fetches the environment for the route midpoint (legs are short in
-V1), and renders verdict, gates, summary cards and the Pareto table.
+lines, fetches the environment along the route, and renders verdict,
+gates, summary cards and the Pareto table.
+
+## Planner v2.1 — learning and long routes (implemented)
+
+- **Per-segment environment** (`providers.routeSamplePoints` /
+  `getRouteEnvironment`): long routes get a forecast column roughly every
+  25 km (bounded fetch count); coverage aggregates pessimistically so the
+  verdict reflects the worst-covered stretch of the passage.
+- **Learning loop closed** (`js/vessel_store.js` + the "learn from a
+  voyage log" input): a telemetry CSV runs through steady-block gating,
+  scores residuals against the model *as it was* (honest
+  prediction-vs-actual), raises a CUSUM drift warning (fouling runs one
+  way, an easier boat the other), refits the NNLS hull curve weighted by
+  block evidence, recalibrates the error quantiles — and the SAFE gate
+  "calibrated-uncertainty" turns green at 10 scored blocks. Persisted in
+  localStorage; the next voyage plan uses the learned model.
+- **Geographic residuals** (`js/geo_residuals.js`): 0.2°-binned EWMA bias
+  applied as a per-segment power factor in the DP (clamped ±30%, needs 3+
+  samples per bin). The store and planner hook are live; population
+  starts when ESP32 telemetry carries GPS positions.
+- **Provider skill** (`js/provider_stats.js`): forecast-vs-observed
+  errors per provider/variable shade the static confidences feeding the
+  coverage score, after 10+ comparisons.
 
 ## Next steps (see docs/ROADMAP.md)
 
-Live boat link (ESP32 Wi-Fi API) for real telemetry and automatic curve
-sync — the ESP32 executes and protects; the phone does all heavy
-planning/learning and streams only a power target (REMOTE mode). Then:
-per-segment environment sampling for long routes, H3 geographic residual
-learning, provider historical-error learning, FES2022 offline tide packs.
+Live boat link: the ESP32 firmware now serves `GET /telemetry` and
+`POST /remote {"target_w": N}` on its SoftAP — the PWA's live-telemetry
+page and automatic log sync over that API are the next app-side work
+(hardware-gated: bench gate A7 validates the link). Later: H3 bins for
+the geo store, FES2022 offline tide packs, corridor-pack offline caching.

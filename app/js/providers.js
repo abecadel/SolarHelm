@@ -22,6 +22,7 @@
 //   wave direction: degrees FROM
 
 import { clearSkyForecast } from './forecast.js';
+import { adjustedConfidence, providerSummary } from './provider_stats.js';
 
 export const MARINE_BASE = 'https://marine-api.open-meteo.com/v1/marine';
 export const WEATHER_BASE = 'https://api.open-meteo.com/v1/forecast';
@@ -156,7 +157,7 @@ const CONFIDENCE = { live: 0.9, clearSky: 0.35, none: 0.0 };
  * (confidence reflects it — the SAFE gates react, the planner still runs).
  */
 export async function getVoyageEnvironment(latDeg, lonDeg, startDate, days,
-                                           fetchImpl) {
+                                           fetchImpl, stats = null) {
   const sources = {
     solar: { id: 'clear-sky-model', confidence: CONFIDENCE.clearSky,
              resolutionKm: 0 },
@@ -203,7 +204,87 @@ export async function getVoyageEnvironment(latDeg, lonDeg, startDate, days,
     // inland points or offline: marine data simply unavailable
   }
 
+  if (stats) {
+    // Shade static confidences by each provider's demonstrated skill.
+    for (const [variable, s] of Object.entries(sources)) {
+      if (s.id !== 'none') {
+        s.confidence = adjustedConfidence(
+            s.confidence, providerSummary(stats, s.id, variable), variable);
+      }
+    }
+  }
   return { hours: base, sources, coverage: coverageScore(sources) };
+}
+
+/**
+ * Picks up to maxPoints sample points along a segmented route (from
+ * route_planner.segmentRoute) and assigns every segment to its nearest
+ * sample. Short routes get one point (the V1 midpoint behaviour); long
+ * routes get a point roughly every minSpacingKm so a 200 km passage no
+ * longer sees only one weather column.
+ * Returns { points: [{lat, lon}], segToPoint: [pointIndex per segment] }.
+ */
+export function routeSamplePoints(segments, maxPoints = 4,
+                                  minSpacingKm = 25) {
+  if (segments.length === 0) return { points: [], segToPoint: [] };
+  const along = []; // cumulative distance to each segment's start
+  let total = 0;
+  for (const seg of segments) {
+    along.push(total);
+    total += seg.lengthKm;
+  }
+  const spacing = Math.max(minSpacingKm, total / maxPoints);
+  const points = [];
+  const pointAlong = [];
+  for (let d = 0; d < total || points.length === 0; d += spacing) {
+    // Segment whose start is nearest this along-route position.
+    let best = 0;
+    for (let i = 1; i < segments.length; i++) {
+      if (Math.abs(along[i] - d) < Math.abs(along[best] - d)) best = i;
+    }
+    const last = points[points.length - 1];
+    if (!last || last.lat !== segments[best].lat ||
+        last.lon !== segments[best].lon) {
+      points.push({ lat: segments[best].lat, lon: segments[best].lon });
+      pointAlong.push(along[best]);
+    }
+  }
+  const segToPoint = segments.map((seg, i) => {
+    let best = 0;
+    for (let p = 1; p < pointAlong.length; p++) {
+      if (Math.abs(pointAlong[p] - along[i]) <
+          Math.abs(pointAlong[best] - along[i])) best = p;
+    }
+    return best;
+  });
+  return { points, segToPoint };
+}
+
+/**
+ * Per-segment environment: getVoyageEnvironment at each route sample
+ * point (bounded fetch count). Coverage is aggregated pessimistically —
+ * each variable's confidence is the worst across all sample points, so a
+ * route that leaves live-data coverage anywhere says so.
+ * Returns { envs, segToPoint, sources, coverage }.
+ */
+export async function getRouteEnvironment(segments, startDate, days,
+                                          fetchImpl, maxPoints = 4,
+                                          stats = null) {
+  const { points, segToPoint } = routeSamplePoints(segments, maxPoints);
+  const envs = await Promise.all(points.map(
+      (p) => getVoyageEnvironment(p.lat, p.lon, startDate, days,
+                                  fetchImpl, stats)));
+  const sources = {};
+  for (const key of Object.keys(envs[0].sources)) {
+    let worst = envs[0].sources[key];
+    for (const e of envs) {
+      if (e.sources[key].confidence < worst.confidence) {
+        worst = e.sources[key];
+      }
+    }
+    sources[key] = worst;
+  }
+  return { envs, segToPoint, sources, coverage: coverageScore(sources) };
 }
 
 /** Per-variable and overall coverage score. Safety-critical variables
