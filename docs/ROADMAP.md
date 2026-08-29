@@ -17,8 +17,9 @@ website with feasibility calculator, CI + Pages deployment.
 - ✅ `drivers/gps/`: NMEA 0183 parser (RMC/VTG/GGA, XOR checksum,
   any talker) + GpsMonitor adapter, desktop-tested to 100% coverage.
   Remaining: ESP32 UART binding + u-blox 5-10 Hz configuration.
-- `drivers/throttle/`: GP8403 I2C driver implementing `IThrottleOutput`
-  (power-on-zero verified with a meter).
+- ✅ `drivers/throttle/`: GP8403 AnalogThrottle (register protocol from
+  DFRobot's library source, injected I2C bus, 100% coverage). Remaining:
+  ESP32 Wire binding + power-on-zero verified with a meter.
 - MANUAL/AUTO input, AUTO-assert heartbeat output, watchdogs enabled.
 - Persisted, versioned config in NVS + validation on load.
 - Target: SolarHelm driving a multimeter from live simulated/replayed

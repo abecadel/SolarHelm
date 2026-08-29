@@ -21,7 +21,13 @@ drivers/
               checksum, any talker, fixed buffers) + GpsMonitor (IGps)
               using Doppler SOG. 100% coverage (tests/test_nmea.cpp).
               Remaining: ESP32 UART binding + u-blox 5-10 Hz config.
-  throttle/   GP8403 (DFR0971) I2C DAC -> IThrottleOutput (0-5 V)
+  throttle/   ✅ IMPLEMENTED: GP8403 (DFR0971) AnalogThrottle
+              (IThrottleOutput, 0-5 V) over an injected I2C bus; register
+              protocol read from DFRobot's own library source; power-on
+              zero re-asserted, EEPROM store deliberately unimplemented,
+              software ceiling under the hardware clamp. 100% coverage
+              (tests/test_gp8403.cpp). Remaining: ESP32 Wire binding +
+              the cold-boot 0 V bench verification.
               later: VescThrottle (UART), CanThrottle (TWAI), PwmThrottle
   mppt/       EPEVER Modbus RTU over RS485 -> ISolarMonitor
   bms/        JK-BMS / JBD serial integrations (telemetry only)
