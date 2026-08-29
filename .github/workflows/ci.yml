@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  coverage:
+    name: Tests + 100% coverage gate (C++ & JS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install gcovr
+        run: pip install gcovr
+      - name: Run coverage gate
+        run: tools/check_coverage.sh
+      - name: Generate scenario plots
+        run: |
+          pip install matplotlib
+          python3 tools/plot_scenarios.py
+      - name: Upload scenario CSVs and plots
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-outputs
+          path: |
+            sim/out/*.csv
+            docs/img/*.png
+
+  browser-smoke:
+    name: Site + planner headless-browser smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Build site and run smoke test
+        run: |
+          tools/build_site.sh
+          node tools/browser_smoke.mjs
+
+  firmware:
+    name: ESP32-S3 firmware stub compiles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Build firmware
+        run: pio run -e esp32s3
