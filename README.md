@@ -59,6 +59,7 @@ Firmware (stub, Milestone 2 begins here): `pio run -e esp32s3`.
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | layers, driver plugin model, decision record |
 | [docs/CONTROL_THEORY.md](docs/CONTROL_THEORY.md) | the control loop, tuning, modes, phases |
 | [docs/SAFETY.md](docs/SAFETY.md) | the 15 fail-safe requirements and the MANUAL-default relay |
+| [docs/MOTOR_PROTECTION_RESEARCH.md](docs/MOTOR_PROTECTION_RESEARCH.md) | do frequent power changes wear components? (no) + the protection envelope |
 | [docs/SIMULATION_RESULTS.md](docs/SIMULATION_RESULTS.md) | scenario graphs + analysis |
 | [docs/RESEARCH.md](docs/RESEARCH.md) | hardware/software ecosystem research |
 | [docs/BUYING_GUIDE.md](docs/BUYING_GUIDE.md) | three costed BOMs in PLN with live links |
