@@ -15,13 +15,15 @@ CXX      ?= g++
 # exception-cleanup edges (which would break the 100% gate spuriously).
 CXXFLAGS ?= -std=c++17 -fno-exceptions -Wall -Wextra -Werror -O0 -g
 COVFLAGS  = --coverage
-INCLUDES  = -Ilib/solarhelm/src -Ilib/simcore/src -Itests
+DRV_INCS  = $(addprefix -I,$(wildcard drivers/*/src))
+INCLUDES  = -Ilib/solarhelm/src -Ilib/simcore/src $(DRV_INCS) -Itests
 
 BUILD    := build
 
 CORE_SRCS := $(wildcard lib/solarhelm/src/sh/*/*.cpp)
 SIMC_SRCS := $(wildcard lib/simcore/src/simc/*.cpp)
-LIB_SRCS  := $(CORE_SRCS) $(SIMC_SRCS)
+DRV_SRCS  := $(wildcard drivers/*/src/*/*.cpp)
+LIB_SRCS  := $(CORE_SRCS) $(SIMC_SRCS) $(DRV_SRCS)
 LIB_OBJS  := $(patsubst %.cpp,$(BUILD)/obj/%.o,$(LIB_SRCS))
 
 TEST_SRCS := $(wildcard tests/test_*.cpp)

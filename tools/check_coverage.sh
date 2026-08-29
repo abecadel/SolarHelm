@@ -43,7 +43,7 @@ fi
 rm -f "$BAD_PROFILE"
 
 gcovr --root . \
-      --filter 'lib/' --filter 'sim/' \
+      --filter 'lib/' --filter 'sim/' --filter 'drivers/' \
       --exclude-throw-branches \
       --print-summary \
       --fail-under-line 100 \

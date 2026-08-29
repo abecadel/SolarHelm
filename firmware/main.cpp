@@ -13,6 +13,7 @@
 
 #include "sh/core/config.h"
 #include "sh/core/helm.h"
+#include "vedirect/monitors.h"
 
 namespace {
 
@@ -32,6 +33,9 @@ public:
 
 SerialTransitionLogger g_logger;
 sh::Helm g_helm(g_config, &g_logger);
+// SmartShunt over VE.Direct (UART wiring lands with Milestone 2's HIL
+// step; the desktop-tested parser is already the battery source).
+vedirect::SmartShuntMonitor g_shunt;
 uint32_t g_last_tick_ms = 0;
 
 }  // namespace
@@ -49,10 +53,11 @@ void loop() {
     const float dt_s = (now_ms - g_last_tick_ms) / 1000.0f;
     g_last_tick_ms = now_ms;
 
-    // No real drivers yet: feed invalid samples. The SafetySupervisor
-    // therefore never allows automatic mode — exactly what we want until
-    // the sensor drivers exist.
-    sh::BatterySample battery;
+    // Milestone 2 HIL: pump Serial1 bytes into g_shunt here
+    // (g_shunt.feed(buf, n, now_ms)). Until the UART is wired, the sample
+    // stays invalid and the SafetySupervisor keeps automatic mode locked
+    // out — exactly the fail-safe default we want.
+    const sh::BatterySample battery = g_shunt.read();
     sh::SolarSample solar;
     sh::GpsSample gps;
     const sh::HelmOutput out = g_helm.step(now_ms, dt_s, battery, solar, gps);

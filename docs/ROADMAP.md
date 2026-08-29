@@ -11,12 +11,9 @@ website with feasibility calculator, CI + Pages deployment.
 
 ## Milestone 2 — ESP32-S3 hardware-in-loop
 
-The next smallest useful step is the **VE.Direct text-protocol parser** as
-a pure-C++ desktop-testable module — it unlocks the real SmartShunt with
-zero risk. Then:
-
-- `drivers/victron/`: VE.Direct frame parser + checksum (desktop tests with
-  recorded frames), UART driver on ESP32.
+- ✅ `drivers/victron/`: VE.Direct frame parser + checksum + SmartShunt
+  and MPPT adapters (desktop-tested to 100% coverage with synthesized
+  frames, HEX-frame tolerant). Remaining: the ESP32 UART binding.
 - `drivers/gps/`: NMEA RMC/VTG parser (desktop-testable), u-blox UART
   config for 5 Hz.
 - `drivers/throttle/`: GP8403 I2C driver implementing `IThrottleOutput`

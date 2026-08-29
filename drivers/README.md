@@ -10,8 +10,13 @@ recorded frames; only the thin UART/I2C bindings are ESP32-specific):
 
 ```
 drivers/
-  victron/    VE.Direct text-protocol parser + SmartShunt IBatteryMonitor
-              (also usable for Victron MPPT telemetry -> ISolarMonitor)
+  victron/    ✅ IMPLEMENTED: VE.Direct text-protocol parser (byte-fed
+              state machine, checksum-validated, HEX-frame tolerant, no
+              dynamic allocation) + SmartShuntMonitor (IBatteryMonitor)
+              and VictronMpptMonitor (ISolarMonitor). Desktop-tested to
+              100% line coverage with synthesized protocol frames
+              (tests/test_vedirect.cpp); the ESP32 UART binding is the
+              remaining Milestone-2 hardware step.
   gps/        NMEA 0183 (RMC/VTG) parser + u-blox config -> IGps
   throttle/   GP8403 (DFR0971) I2C DAC -> IThrottleOutput (0-5 V)
               later: VescThrottle (UART), CanThrottle (TWAI), PwmThrottle
