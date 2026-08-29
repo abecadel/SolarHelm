@@ -6,6 +6,8 @@
 
 export const DEFAULT_PROFILE = {
   schema_version: 1,
+  config_revision: 1,
+  config_change_note: 'initial reference configuration',
   name: 'SolarHelm reference launch (24 V prototype)',
   hull_efficiency_curve_kmh_whkm: [
     [3.0, 85.0],

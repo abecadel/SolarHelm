@@ -68,6 +68,9 @@ Firmware (stub, Milestone 2 begins here): `pio run -e esp32s3`.
 | [docs/HARDWARE_TEST_PLAN.md](docs/HARDWARE_TEST_PLAN.md) | what to order, in which waves, and the gated bench/water test protocol |
 | [docs/GLOBAL_ADAPTIVE_ROUTE_PLANNER_RESEARCH.md](docs/GLOBAL_ADAPTIVE_ROUTE_PLANNER_RESEARCH.md) | the global-first voyage planner: DP optimizer, PWA architecture, SAFE gates |
 | [docs/GLOBAL_ENVIRONMENT_PROVIDERS.md](docs/GLOBAL_ENVIRONMENT_PROVIDERS.md) | global environmental data providers, tiers, coverage registry |
+| [docs/case-studies/HELIOS_11.md](docs/case-studies/HELIOS_11.md) | the Helios 11 real-world solar boat: facts, sources, confidence levels |
+| [docs/case-studies/HELIOS_11_LESSONS.md](docs/case-studies/HELIOS_11_LESSONS.md) | 12 engineering lessons from Helios wired into SolarHelm requirements |
+| [docs/reference-vessels/SOLARHELM_LIGHT_POWERCAT.md](docs/reference-vessels/SOLARHELM_LIGHT_POWERCAT.md) | can a 7–10 m ultralight DIY powercat cruise on sunshine? (modeled: yes) |
 | [docs/ADAPTIVE_ENERGY_MODEL_RESEARCH.md](docs/ADAPTIVE_ENERGY_MODEL_RESEARCH.md) | how SolarHelm learns the individual vessel |
 | [docs/COMPANION_APP.md](docs/COMPANION_APP.md) | the planner PWA |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | milestones 2–4 and the future list |

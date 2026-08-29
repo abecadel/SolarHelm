@@ -251,6 +251,7 @@ fine for our purpose. Old NEO-6M modules (1–5 Hz, GPS-only, −161 dBm,
 | **Moscow Polytech Solar Regatta** | boat telemetry (`solar-monitor`) | confirms the energy-aware-cruise-control niche is empty in open source |
 | **VESC ecosystem** | open ESC + protocol | future VescThrottle driver; command-timeout failsafe; VESC as power sensor |
 | **Victron VE.Direct ecosystem** | text protocol + parsers | primary battery-power source; one parser covers shunt and MPPT |
+| **Helios 11** (Lukas Sjöman / True North Yachts) | ~11 m, ~1.5 t self-built solar monohull; ~3,000 nm Finland→Ibiza on zero fuel (2025–26) | the real-world validation dataset: hull efficiency beats battery capacity; waves out-punish wind; the EnergyKnee is real; batteries are buffers. Full case study: docs/case-studies/HELIOS_11.md + HELIOS_11_LESSONS.md |
 
 ## Assumptions and open questions
 

@@ -290,6 +290,20 @@ mitigations). **Q22** → §SAFE vs POSSIBLE.
   arrive incrementally as corridor-pack builders behind the same
   interfaces.
 
+### Field corroboration: Helios 11 (docs/case-studies/HELIOS_11.md)
+
+The 2025–26 Finland→Ibiza voyage of the Helios 11 solar monohull is a
+~3,000 nm existence proof of this planner's core framing: the governing
+quantity was the **day-level energy ledger** (daily solar ~15 kWh +
+buffer − propulsion − hotel), never battery range — ~100 nm typical
+days on a ≤30 kWh pack. Its failure modes are our gate list read back:
+rough-water days collapsed range to ~40 nm (waves gate), and the
+builder hand-flew battery-neutral speed all day (what the DP's power
+ladder + SOLAR mode automate). Planner follow-ups from the lessons doc:
+surface a per-day energy ledger from the DP plan, a min-steerage-speed
+safety gate, and an EnergyKnee-bounded default power ladder
+(HELIOS_11_LESSONS.md L5, L7, L12).
+
 ## Open items / uncertainties
 
 DP compute benchmarks (add to CI); FES2022/GSHHG licensing for bundled

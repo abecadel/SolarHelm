@@ -95,6 +95,19 @@ motion-induced resistance dominates — **physics contributes the Hs²
 scaling, the heading taper, and the ω_e resonance feature; the residual
 learner owns the magnitude.** Never a universal "0.5 m = +20 %" rule.
 
+Real-world corroboration (docs/case-studies/HELIOS_11.md, O2): the
+Helios 11 builder's field experience — daily range collapsing ~100 →
+40–45 nm in rough water while a 25 kn headwind cost only a throttle
+bump — matches this section's prediction that wave state, not wind
+speed, is the first-order environmental variable for light hulls, and
+that the λ/LWL ≈ 1 chop band is where an ultralight suffers most. His
+"overgrown hull" efficiency drain is likewise field evidence for the
+CUSUM fouling-drift detector (§7). One addition his story forces:
+**learned state must branch on configuration revision** — Helios
+changed PV, battery mass and appendages mid-voyage, and residuals from
+different configurations must never be pooled (see HELIOS_11_LESSONS.md
+L1; `config_revision` now lives in the boat profile).
+
 ## 5. Current estimation without an STW sensor (Q18, Q19)
 
 Observability analysis: with SOG/COG (GPS), heading, and power only, the
