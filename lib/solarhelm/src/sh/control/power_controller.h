@@ -32,8 +32,11 @@ public:
     void reset();
 
     // One control tick. Returns the motor command in percent.
+    // ceiling_pct: dynamic upper bound from the BatteryGuard envelope
+    // (100 = unconstrained). A ceiling below the held command overrides the
+    // deadband freeze and ramps the command down at the configured rate.
     float update(float measured_battery_power_w, float target_battery_power_w,
-                 float dt_s);
+                 float dt_s, float ceiling_pct = 100.0f);
 
     float command_pct() const { return command_pct_; }
     float filtered_power_w() const { return filter_.value(); }

@@ -29,6 +29,10 @@ enum class Mode : uint8_t {
     kManual = 0,
     kSolar = 1,
     kSolarPlus = 2,
+    // Phone planner streams a motor-power target; the ESP32 still owns
+    // ramps, the protection envelope, the reserve floor, and degrades to
+    // SOLAR when the stream goes stale.
+    kRemote = 3,
 };
 
 const char* modeName(Mode m);
@@ -50,6 +54,11 @@ public:
 
     // Unconditional drop to MANUAL (sensor loss, watchdog, user override).
     void forceManual(const char* reason, uint32_t t_ms);
+
+    // Supervisor-initiated degradation between automatic modes (e.g.
+    // REMOTE -> SOLAR on a stale phone link), logged with its reason.
+    // Never escalates from MANUAL.
+    void degrade(Mode to, const char* reason, uint32_t t_ms);
 
     // Battery-power target for the active mode, with the reserve-SOC floor
     // applied (latched with hysteresis; see updateReserveLatch). Only

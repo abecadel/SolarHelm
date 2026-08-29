@@ -69,6 +69,32 @@ TEST(config_rejects_every_bad_field) {
          ConfigError::kBadTimeouts},
         {[](ControlConfig& c) { c.motor_max_power_w = 0.0f; },
          ConfigError::kBadMotorPower},
+        {[](ControlConfig& c) { c.remote_timeout_ms = 0; },
+         ConfigError::kBadTimeouts},
+        {[](ControlConfig& c) { c.sag_stop_v = c.sag_hard_v; },
+         ConfigError::kBadBatteryGuard},
+        {[](ControlConfig& c) { c.sag_hard_v = c.sag_soft_v; },
+         ConfigError::kBadBatteryGuard},
+        {[](ControlConfig& c) { c.sag_release_margin_v = -1.0f; },
+         ConfigError::kBadBatteryGuard},
+        {[](ControlConfig& c) { c.sag_debounce_s = -1.0f; },
+         ConfigError::kBadBatteryGuard},
+        {[](ControlConfig& c) { c.sag_hard_cap_pct = 0.0f; },
+         ConfigError::kBadBatteryGuard},
+        {[](ControlConfig& c) { c.sag_soft_cap_pct = c.sag_hard_cap_pct - 1; },
+         ConfigError::kBadBatteryGuard},
+        {[](ControlConfig& c) { c.sag_soft_cap_pct = 101.0f; },
+         ConfigError::kBadBatteryGuard},
+        {[](ControlConfig& c) { c.max_discharge_current_a = 0.0f; },
+         ConfigError::kBadBatteryGuard},
+        {[](ControlConfig& c) { c.current_debounce_s = -1.0f; },
+         ConfigError::kBadBatteryGuard},
+        {[](ControlConfig& c) { c.batt_cold_derate_c = 50.0f; },
+         ConfigError::kBadBatteryGuard},
+        {[](ControlConfig& c) { c.batt_hot_derate_c = 70.0f; },
+         ConfigError::kBadBatteryGuard},
+        {[](ControlConfig& c) { c.temp_derate_cap_pct = 0.0f; },
+         ConfigError::kBadBatteryGuard},
     };
     for (const Case& c : cases) {
         ControlConfig cfg;
@@ -84,7 +110,7 @@ TEST(config_error_names_are_distinct) {
         ConfigError::kBadFilter,     ConfigError::kBadRampRates,
         ConfigError::kBadCommandLimits, ConfigError::kBadReserveSoc,
         ConfigError::kBadSolarPlusTarget, ConfigError::kBadTimeouts,
-        ConfigError::kBadMotorPower,
+        ConfigError::kBadMotorPower, ConfigError::kBadBatteryGuard,
     };
     std::vector<std::string> names;
     for (ConfigError e : all) {
@@ -120,7 +146,25 @@ TEST(mode_names) {
     CHECK(std::string(sh::modeName(Mode::kManual)) == "MANUAL");
     CHECK(std::string(sh::modeName(Mode::kSolar)) == "SOLAR");
     CHECK(std::string(sh::modeName(Mode::kSolarPlus)) == "SOLAR+");
+    CHECK(std::string(sh::modeName(Mode::kRemote)) == "REMOTE");
     CHECK(std::string(sh::modeName(static_cast<Mode>(99))) == "UNKNOWN");
+}
+
+TEST(mode_degrade_between_auto_modes_only) {
+    ControlConfig cfg;
+    CapturingLogger log;
+    ModeManager mm(cfg, &log);
+    // From MANUAL: degrade is a no-op (never escalates).
+    mm.degrade(Mode::kSolar, "x", 0);
+    CHECK(mm.mode() == Mode::kManual);
+    // From REMOTE to SOLAR: allowed and logged with its reason.
+    mm.requestMode(Mode::kRemote, true, 10);
+    mm.degrade(Mode::kSolar, "remote_stale", 20);
+    CHECK(mm.mode() == Mode::kSolar);
+    CHECK(log.entries.back().reason == "remote_stale");
+    // Degrading to MANUAL is refused (that's forceManual's job).
+    mm.degrade(Mode::kManual, "x", 30);
+    CHECK(mm.mode() == Mode::kSolar);
 }
 
 TEST(mode_boot_is_manual_and_auto_needs_health) {

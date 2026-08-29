@@ -23,9 +23,11 @@
 
 #include "sh/control/mode_manager.h"
 #include "sh/control/power_controller.h"
+#include "sh/control/ratelimit.h"
 #include "sh/core/config.h"
 #include "sh/core/samples.h"
 #include "sh/energy/tracker.h"
+#include "sh/safety/battery_guard.h"
 #include "sh/safety/supervisor.h"
 #include "sh/telemetry/telemetry.h"
 
@@ -53,6 +55,14 @@ public:
     // Immediate drop to MANUAL (user override, kill switch sensed, ...).
     void forceManual(const char* reason, uint32_t now_ms);
 
+    // REMOTE mode: the phone planner streams a motor-power target here.
+    // Entering kRemote is refused without a fresh target; a target older
+    // than cfg.remote_timeout_ms degrades the mode to SOLAR (the ESP32
+    // never depends on the phone for safety). The target passes through
+    // the same ramps, protection-envelope ceiling and reserve-SOC floor
+    // as every other automatic mode.
+    void setRemoteTarget(float motor_power_w, uint32_t now_ms);
+
     // One control tick: dt_s since the previous step; samples may be stale
     // or invalid — Helm decides what is trustworthy.
     HelmOutput step(uint32_t now_ms, float dt_s, const BatterySample& battery,
@@ -69,8 +79,14 @@ private:
     SafetySupervisor safety_;
     ModeManager modes_;
     BatteryPowerController controller_;
+    BatteryGuard guard_;
     EnergyTracker energy_;
     SafetyVerdict last_verdict_;
+    // REMOTE mode state.
+    RateLimiter remote_ramp_;
+    float remote_target_w_ = 0.0f;
+    uint32_t remote_target_ms_ = 0;
+    bool remote_target_seen_ = false;
 };
 
 }  // namespace sh

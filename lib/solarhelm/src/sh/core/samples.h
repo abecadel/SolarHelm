@@ -18,6 +18,8 @@ struct BatterySample {
     float current_a = 0.0f;     // + charging, - discharging
     float power_w = 0.0f;       // + charging, - discharging
     float soc_pct = 0.0f;       // 0..100
+    bool has_temperature = false;  // battery temp sensor present & reporting
+    float temperature_c = 0.0f;
 };
 
 // One reading from a solar production source (MPPT telemetry).

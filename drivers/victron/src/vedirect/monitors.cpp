@@ -44,6 +44,14 @@ void SmartShuntMonitor::applyBlock(const Block& b, uint32_t now_ms) {
     } else {
         s.soc_pct = last_.soc_pct;
     }
+
+    // T [degC] appears when the shunt's Aux input is a temperature sensor —
+    // it feeds the BatteryGuard's temperature policy.
+    long t_c = 0;
+    if (parseLong(b.find("T"), &t_c)) {
+        s.has_temperature = true;
+        s.temperature_c = static_cast<float>(t_c);
+    }
     last_ = s;
 }
 

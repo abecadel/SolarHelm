@@ -178,6 +178,21 @@ TEST(shunt_monitor_converts_fields_and_sign_convention) {
     CHECK_NEAR(s.soc_pct, 83.4f, 1e-4);
 }
 
+TEST(shunt_monitor_parses_aux_temperature) {
+    SmartShuntMonitor m;
+    Fields f = shuntFields();
+    f.push_back({"T", "23"});
+    const std::string block = makeBlock(f);
+    m.feed(reinterpret_cast<const uint8_t*>(block.data()), block.size(), 1000);
+    sh::BatterySample s = m.read();
+    CHECK(s.has_temperature);
+    CHECK_NEAR(s.temperature_c, 23.0f, 1e-6);
+    // Without T the flag stays off.
+    const std::string plain = makeBlock(shuntFields());
+    m.feed(reinterpret_cast<const uint8_t*>(plain.data()), plain.size(), 2000);
+    CHECK(!m.read().has_temperature);
+}
+
 TEST(shunt_monitor_computes_power_when_p_missing_and_keeps_soc) {
     SmartShuntMonitor m;
     const std::string first = makeBlock(shuntFields());

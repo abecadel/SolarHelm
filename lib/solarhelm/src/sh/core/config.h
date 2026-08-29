@@ -26,6 +26,7 @@ enum class ConfigError : uint8_t {
     kBadSolarPlusTarget,
     kBadTimeouts,
     kBadMotorPower,
+    kBadBatteryGuard,
 };
 
 const char* configErrorName(ConfigError e);
@@ -61,6 +62,33 @@ struct ControlConfig {
     uint32_t battery_timeout_ms = 3000;  // stale shunt data -> leave auto mode
     uint32_t gps_timeout_ms = 5000;      // stale GPS -> pause distance/efficiency
     uint32_t solar_timeout_ms = 5000;    // stale MPPT telemetry -> treat PV as 0
+    // REMOTE mode: the phone planner streams a motor-power target; if it
+    // goes stale the boat degrades to self-contained SOLAR mode (the ESP32
+    // never depends on the phone for safety).
+    uint32_t remote_timeout_ms = 10000;
+
+    // --- Battery protection envelope (docs/MOTOR_PROTECTION_RESEARCH.md) ---
+    // Staged voltage-sag backoff for an 8S LFP pack; all thresholds are
+    // under-load pack voltages and MUST sit above the BMS undervoltage trip
+    // and the motor controller's low-voltage cutback (datasheet-derived).
+    float sag_soft_v = 24.4f;    // ~3.05 V/cell: cap command at sag_soft_cap
+    float sag_hard_v = 23.6f;    // ~2.95 V/cell: cap command at sag_hard_cap
+    float sag_stop_v = 23.2f;    // ~2.90 V/cell: graceful stop (forced MANUAL)
+    float sag_release_margin_v = 0.4f;  // hysteresis for stage release
+    float sag_debounce_s = 4.0f;        // wave-sag transients don't trigger
+    float sag_soft_cap_pct = 50.0f;
+    float sag_hard_cap_pct = 15.0f;
+
+    // Discharge current cap: <= 80% of the smallest continuous rating in
+    // the chain (controller 60 A -> 48 A for the reference build).
+    float max_discharge_current_a = 48.0f;
+    float current_debounce_s = 2.0f;
+
+    // Battery temperature policy (applies only when a sensor reports).
+    float batt_cold_derate_c = -10.0f;  // below: cap at temp_derate_cap
+    float batt_hot_derate_c = 45.0f;    // above: cap at temp_derate_cap
+    float batt_stop_c = 60.0f;          // at/above: graceful stop
+    float temp_derate_cap_pct = 50.0f;
 
     // --- Telemetry / estimation ---
     float motor_max_power_w = 1164.0f;  // full-throttle electrical power

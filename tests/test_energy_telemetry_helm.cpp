@@ -284,6 +284,187 @@ TEST(helm_daily_reset) {
     CHECK_NEAR(helm.energy().energySolarWh(), 0.0f, 1e-6);
 }
 
+TEST(helm_guard_soft_sag_caps_command_and_flags) {
+    ControlConfig cfg;
+    cfg.filter_time_constant_s = 0.0f;
+    Helm helm(cfg, nullptr);
+    uint32_t t = 1000;
+    // Healthy pack, big surplus: command grows past 50%.
+    helm.step(t, 0.5f, battSample(t, 800.0f, 80.0f), solarSample(t, 900.0f),
+              gpsSample(t, 1.0f));
+    helm.requestMode(Mode::kSolar, t);
+    sh::HelmOutput out;
+    for (int i = 0; i < 200; ++i) {
+        t += 500;
+        out = helm.step(t, 0.5f, battSample(t, 800.0f, 80.0f),
+                        solarSample(t, 900.0f), gpsSample(t, 1.0f));
+    }
+    CHECK(out.motor_cmd_pct > 60.0f);
+    // Pack sags below the soft threshold (debounced), still fresh data:
+    // ceiling engages, command ramps down to 50%.
+    for (int i = 0; i < 60; ++i) {
+        t += 500;
+        sh::BatterySample sag = battSample(t, 800.0f, 80.0f);
+        sag.voltage_v = 24.2f;
+        out = helm.step(t, 0.5f, sag, solarSample(t, 900.0f),
+                        gpsSample(t, 1.0f));
+    }
+    CHECK((out.telemetry.fault_flags & sh::kFaultSagSoft) != 0);
+    CHECK(out.motor_cmd_pct <= cfg.sag_soft_cap_pct + 1e-3f);
+    CHECK(out.auto_active);  // soft stage derates, it does not abort
+}
+
+TEST(helm_guard_stop_stage_forces_manual) {
+    ControlConfig cfg;
+    Helm helm(cfg, nullptr);
+    uint32_t t = 1000;
+    helm.step(t, 0.5f, battSample(t, 100.0f, 60.0f), solarSample(t, 500.0f),
+              gpsSample(t, 1.0f));
+    helm.requestMode(Mode::kSolar, t);
+    sh::HelmOutput out;
+    uint16_t flags_seen = 0;
+    for (int i = 0; i < 20; ++i) {  // 10 s below stop voltage (> debounce)
+        t += 500;
+        sh::BatterySample dead = battSample(t, -200.0f, 10.0f);
+        dead.voltage_v = 23.0f;
+        out = helm.step(t, 0.5f, dead, solarSample(t, 100.0f),
+                        gpsSample(t, 1.0f));
+        flags_seen |= out.telemetry.fault_flags;
+    }
+    CHECK(!out.auto_active);
+    CHECK_NEAR(out.motor_cmd_pct, 0.0f, 1e-6);
+    CHECK(helm.mode() == Mode::kManual);
+    // The stop flag is raised on the tick that triggered the stop (after
+    // that, MANUAL ticks no longer evaluate the guard).
+    CHECK((flags_seen & sh::kFaultSagStop) != 0);
+}
+
+TEST(helm_remote_mode_requires_fresh_target) {
+    ControlConfig cfg;
+    Helm helm(cfg, nullptr);
+    uint32_t t = 1000;
+    helm.step(t, 0.5f, battSample(t, 100.0f, 80.0f), solarSample(t, 500.0f),
+              gpsSample(t, 1.0f));
+    // No target yet: refused.
+    CHECK(!helm.requestMode(Mode::kRemote, t));
+    // Stale target: refused.
+    helm.setRemoteTarget(500.0f, t);
+    CHECK(!helm.requestMode(Mode::kRemote, t + cfg.remote_timeout_ms + 1));
+    // Fresh target: granted.
+    helm.setRemoteTarget(500.0f, t);
+    CHECK(helm.requestMode(Mode::kRemote, t + 100));
+    CHECK(helm.mode() == Mode::kRemote);
+}
+
+TEST(helm_remote_executes_target_through_ramps) {
+    ControlConfig cfg;
+    Helm helm(cfg, nullptr);
+    uint32_t t = 1000;
+    helm.step(t, 0.5f, battSample(t, 100.0f, 80.0f), solarSample(t, 500.0f),
+              gpsSample(t, 1.0f));
+    helm.setRemoteTarget(582.0f, t);  // 50% of 1164 W
+    helm.requestMode(Mode::kRemote, t);
+    sh::HelmOutput out;
+    float prev = 0.0f;
+    for (int i = 0; i < 100; ++i) {
+        t += 500;
+        helm.setRemoteTarget(582.0f, t);  // phone keeps streaming
+        out = helm.step(t, 0.5f, battSample(t, 100.0f, 80.0f),
+                        solarSample(t, 500.0f), gpsSample(t, 1.0f));
+        CHECK(out.motor_cmd_pct - prev <=
+              cfg.max_ramp_up_pct_per_s * 0.5f + 1e-4f);
+        prev = out.motor_cmd_pct;
+    }
+    CHECK_NEAR(out.motor_cmd_pct, 50.0f, 0.5f);
+    CHECK(out.telemetry.mode == static_cast<uint8_t>(Mode::kRemote));
+    // Negative targets clamp to zero (no automatic reverse, ever).
+    helm.setRemoteTarget(-500.0f, t);
+    for (int i = 0; i < 300; ++i) {
+        t += 500;
+        helm.setRemoteTarget(-500.0f, t);
+        out = helm.step(t, 0.5f, battSample(t, 100.0f, 80.0f),
+                        solarSample(t, 500.0f), gpsSample(t, 1.0f));
+    }
+    CHECK_NEAR(out.motor_cmd_pct, 0.0f, 1e-3);
+}
+
+TEST(helm_remote_target_clamped_by_max_and_guard_ceiling) {
+    ControlConfig cfg;
+    cfg.max_motor_cmd_pct = 90.0f;  // configured cap under the 100% ceiling
+    Helm helm(cfg, nullptr);
+    uint32_t t = 1000;
+    helm.step(t, 0.5f, battSample(t, 100.0f, 80.0f), solarSample(t, 500.0f),
+              gpsSample(t, 1.0f));
+    // Phone asks for more than the motor's rating: clamped to 100%.
+    helm.setRemoteTarget(3000.0f, t);
+    helm.requestMode(Mode::kRemote, t);
+    sh::HelmOutput out;
+    for (int i = 0; i < 200; ++i) {
+        t += 500;
+        helm.setRemoteTarget(3000.0f, t);
+        out = helm.step(t, 0.5f, battSample(t, 100.0f, 80.0f),
+                        solarSample(t, 500.0f), gpsSample(t, 1.0f));
+    }
+    CHECK_NEAR(out.motor_cmd_pct, cfg.max_motor_cmd_pct, 1e-3);
+    // Pack sags below the soft threshold: the guard ceiling clamps the
+    // remote command down to the soft cap.
+    for (int i = 0; i < 60; ++i) {
+        t += 500;
+        helm.setRemoteTarget(3000.0f, t);
+        sh::BatterySample sag = battSample(t, -300.0f, 60.0f);
+        sag.voltage_v = 24.2f;
+        out = helm.step(t, 0.5f, sag, solarSample(t, 200.0f),
+                        gpsSample(t, 1.0f));
+    }
+    CHECK((out.telemetry.fault_flags & sh::kFaultSagSoft) != 0);
+    CHECK(out.motor_cmd_pct <= cfg.sag_soft_cap_pct + 1e-3f);
+    CHECK(helm.mode() == Mode::kRemote);
+}
+
+TEST(helm_remote_stale_degrades_to_solar) {
+    ControlConfig cfg;
+    Helm helm(cfg, nullptr);
+    uint32_t t = 1000;
+    helm.step(t, 0.5f, battSample(t, 100.0f, 80.0f), solarSample(t, 500.0f),
+              gpsSample(t, 1.0f));
+    helm.setRemoteTarget(582.0f, t);
+    helm.requestMode(Mode::kRemote, t);
+    // Phone goes silent: after the timeout the boat degrades to SOLAR and
+    // keeps cruising autonomously (no dead stop mid-water).
+    t += cfg.remote_timeout_ms + 1000;
+    const sh::HelmOutput out =
+        helm.step(t, 0.5f, battSample(t, 100.0f, 80.0f),
+                  solarSample(t, 500.0f), gpsSample(t, 1.0f));
+    CHECK(helm.mode() == Mode::kSolar);
+    CHECK(out.auto_active);
+    CHECK((out.telemetry.fault_flags & sh::kFaultRemoteStale) != 0);
+}
+
+TEST(helm_remote_respects_reserve_floor) {
+    ControlConfig cfg;
+    cfg.filter_time_constant_s = 0.0f;
+    Helm helm(cfg, nullptr);
+    uint32_t t = 1000;
+    helm.step(t, 0.5f, battSample(t, 100.0f, 19.0f), solarSample(t, 500.0f),
+              gpsSample(t, 1.0f));
+    helm.setRemoteTarget(1000.0f, t);  // phone asks for a lot...
+    helm.requestMode(Mode::kRemote, t);
+    sh::HelmOutput out;
+    for (int i = 0; i < 100; ++i) {
+        t += 500;
+        helm.setRemoteTarget(1000.0f, t);
+        // ...but SOC is at the reserve: REMOTE falls back to the
+        // battery-power loop with the floored target.
+        out = helm.step(t, 0.5f, battSample(t, 0.0f, 19.0f),
+                        solarSample(t, 500.0f), gpsSample(t, 1.0f));
+    }
+    CHECK((out.telemetry.fault_flags & sh::kFaultSocAtReserve) != 0);
+    CHECK(helm.mode() == Mode::kRemote);  // stays in mode, floors the power
+    // The command settles near zero: measured battery power 0 < floored
+    // target (+deadband) means no surplus to spend.
+    CHECK(out.motor_cmd_pct < 20.0f);
+}
+
 TEST(helm_force_manual_from_auto) {
     ControlConfig cfg;
     Helm helm(cfg, nullptr);

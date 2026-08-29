@@ -28,6 +28,14 @@ enum FaultFlag : uint16_t {
     kFaultSocAtReserve = 1u << 3,   // informational: reserve floor active
     kFaultConfigInvalid = 1u << 4,
     kFaultSolarStale = 1u << 5,     // MPPT telemetry stale; PV treated as 0
+    // Battery protection envelope (BatteryGuard):
+    kFaultSagSoft = 1u << 6,        // voltage sag: soft command cap active
+    kFaultSagHard = 1u << 7,        // voltage sag: hard command cap active
+    kFaultSagStop = 1u << 8,        // voltage sag: graceful stop issued
+    kFaultOverCurrent = 1u << 9,    // discharge current cap engaged
+    kFaultBattTempDerate = 1u << 10,   // battery too cold/hot: derated
+    kFaultChargeBelowFreezing = 1u << 11,  // charging while <= 0 degC (alert)
+    kFaultRemoteStale = 1u << 12,   // phone target stale -> degraded to SOLAR
 };
 
 struct SafetyVerdict {

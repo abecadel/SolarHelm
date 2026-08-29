@@ -180,6 +180,59 @@ TEST(power_controller_reset_returns_to_zero) {
     CHECK_NEAR(ctl.filtered_power_w(), 0.0f, 1e-6);
 }
 
+TEST(power_controller_respects_guard_ceiling) {
+    ControlConfig cfg;
+    cfg.filter_time_constant_s = 0.0f;
+    BatteryPowerController ctl(cfg);
+    // Drive up under a huge surplus with a 50% ceiling.
+    float cmd = 0.0f;
+    for (int i = 0; i < 200; ++i) {
+        cmd = ctl.update(1000.0f, 0.0f, 0.5f, 50.0f);
+        CHECK(cmd <= 50.0f + 1e-4f);
+    }
+    CHECK_NEAR(cmd, 50.0f, 1e-3);
+    // Lifting the ceiling ramps up at the configured up-rate, no jump.
+    const float before = ctl.command_pct();
+    const float after = ctl.update(1000.0f, 0.0f, 0.5f, 100.0f);
+    CHECK(after - before <= cfg.max_ramp_up_pct_per_s * 0.5f + 1e-4f);
+    CHECK(after > before);
+}
+
+TEST(power_controller_ceiling_overrides_deadband_freeze) {
+    ControlConfig cfg;
+    cfg.filter_time_constant_s = 0.0f;
+    BatteryPowerController ctl(cfg);
+    for (int i = 0; i < 100; ++i) {
+        ctl.update(1000.0f, 0.0f, 0.5f);  // wind up to a high command
+    }
+    const float held = ctl.command_pct();
+    CHECK(held > 60.0f);
+    // Error inside deadband but ceiling dropped below the held command:
+    // must ramp DOWN toward the ceiling despite the deadband.
+    float cmd = held;
+    for (int i = 0; i < 100; ++i) {
+        const float prev = cmd;
+        cmd = ctl.update(cfg.deadband_w * 0.5f, 0.0f, 0.5f, 20.0f);
+        CHECK(prev - cmd <= cfg.max_ramp_down_pct_per_s * 0.5f + 1e-4f);
+    }
+    CHECK_NEAR(cmd, 20.0f, 1e-3);
+    // Back inside deadband with a normal ceiling: freeze holds again.
+    const float frozen = ctl.update(cfg.deadband_w * 0.5f, 0.0f, 0.5f);
+    CHECK_NEAR(frozen, cmd, 1e-5);
+}
+
+TEST(power_controller_ceiling_below_min_clamps_at_min) {
+    ControlConfig cfg;
+    cfg.min_motor_cmd_pct = 5.0f;
+    cfg.filter_time_constant_s = 0.0f;
+    BatteryPowerController ctl(cfg);
+    float cmd = 0.0f;
+    for (int i = 0; i < 100; ++i) {
+        cmd = ctl.update(-1000.0f, 0.0f, 0.5f, 1.0f);  // ceiling under min
+    }
+    CHECK_NEAR(cmd, cfg.min_motor_cmd_pct, 1e-3);
+}
+
 TEST(power_controller_filtered_power_accessor) {
     ControlConfig cfg;
     cfg.filter_time_constant_s = 0.0f;

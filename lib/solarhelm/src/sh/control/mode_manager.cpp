@@ -7,6 +7,7 @@ const char* modeName(Mode m) {
         case Mode::kManual: return "MANUAL";
         case Mode::kSolar: return "SOLAR";
         case Mode::kSolarPlus: return "SOLAR+";
+        case Mode::kRemote: return "REMOTE";
         default: return "UNKNOWN";
     }
 }
@@ -35,6 +36,13 @@ bool ModeManager::requestMode(Mode mode, bool healthy, uint32_t t_ms) {
 
 void ModeManager::forceManual(const char* reason, uint32_t t_ms) {
     transition(Mode::kManual, reason, t_ms);
+}
+
+void ModeManager::degrade(Mode to, const char* reason, uint32_t t_ms) {
+    if (mode_ == Mode::kManual || to == Mode::kManual) {
+        return;  // MANUAL is left/entered only via requestMode/forceManual
+    }
+    transition(to, reason, t_ms);
 }
 
 void ModeManager::updateReserveLatch(float soc_pct) {

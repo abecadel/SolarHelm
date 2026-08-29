@@ -15,6 +15,7 @@ const char* configErrorName(ConfigError e) {
         case ConfigError::kBadSolarPlusTarget: return "bad_solar_plus_target";
         case ConfigError::kBadTimeouts: return "bad_timeouts";
         case ConfigError::kBadMotorPower: return "bad_motor_power";
+        case ConfigError::kBadBatteryGuard: return "bad_battery_guard";
         default: return "unknown";
     }
 }
@@ -48,11 +49,23 @@ ConfigError ControlConfig::validate() const {
         return ConfigError::kBadSolarPlusTarget;
     }
     if (battery_timeout_ms == 0 || gps_timeout_ms == 0 ||
-        solar_timeout_ms == 0) {
+        solar_timeout_ms == 0 || remote_timeout_ms == 0) {
         return ConfigError::kBadTimeouts;
     }
     if (!(motor_max_power_w > 0.0f)) {
         return ConfigError::kBadMotorPower;
+    }
+    if (!(sag_stop_v > 0.0f) || !(sag_stop_v < sag_hard_v) ||
+        !(sag_hard_v < sag_soft_v) || !(sag_release_margin_v >= 0.0f) ||
+        !(sag_debounce_s >= 0.0f) || !(current_debounce_s >= 0.0f) ||
+        !(sag_hard_cap_pct > 0.0f) ||
+        !(sag_hard_cap_pct <= sag_soft_cap_pct) ||
+        !(sag_soft_cap_pct <= 100.0f) ||
+        !(max_discharge_current_a > 0.0f) ||
+        !(batt_cold_derate_c < batt_hot_derate_c) ||
+        !(batt_hot_derate_c < batt_stop_c) ||
+        !(temp_derate_cap_pct > 0.0f) || !(temp_derate_cap_pct <= 100.0f)) {
+        return ConfigError::kBadBatteryGuard;
     }
     return ConfigError::kNone;
 }

@@ -7,17 +7,28 @@ Helm::Helm(const ControlConfig& cfg, ITransitionLogger* logger)
       config_valid_(cfg.validate() == ConfigError::kNone),
       safety_(cfg),
       modes_(cfg, logger),
-      controller_(cfg) {}
+      controller_(cfg),
+      guard_(cfg) {
+    remote_ramp_.configure(cfg.max_ramp_up_pct_per_s,
+                           cfg.max_ramp_down_pct_per_s);
+    remote_ramp_.reset(0.0f);
+}
 
 bool Helm::requestMode(Mode mode, uint32_t now_ms) {
     if (mode != Mode::kManual && !config_valid_) {
         return false;
+    }
+    if (mode == Mode::kRemote &&
+        (!remote_target_seen_ ||
+         (now_ms - remote_target_ms_) > cfg_.remote_timeout_ms)) {
+        return false;  // no fresh phone target: nothing to execute
     }
     const bool healthy = last_verdict_.allow_auto;
     const bool was_auto = modes_.isAutomatic();
     const bool granted = modes_.requestMode(mode, healthy, now_ms);
     if (granted && modes_.isAutomatic() && !was_auto) {
         controller_.reset();  // throttle always ramps from zero on activation
+        remote_ramp_.reset(0.0f);
     }
     return granted;
 }
@@ -25,6 +36,16 @@ bool Helm::requestMode(Mode mode, uint32_t now_ms) {
 void Helm::forceManual(const char* reason, uint32_t now_ms) {
     modes_.forceManual(reason, now_ms);
     controller_.reset();
+    remote_ramp_.reset(0.0f);
+}
+
+void Helm::setRemoteTarget(float motor_power_w, uint32_t now_ms) {
+    if (motor_power_w < 0.0f) {
+        motor_power_w = 0.0f;  // reverse/negative never comes from the phone
+    }
+    remote_target_w_ = motor_power_w;
+    remote_target_ms_ = now_ms;
+    remote_target_seen_ = true;
 }
 
 HelmOutput Helm::step(uint32_t now_ms, float dt_s,
@@ -44,13 +65,47 @@ HelmOutput Helm::step(uint32_t now_ms, float dt_s,
     }
 
     float target_w = 0.0f;
+    GuardOutput guard;  // defaults to a full ceiling when not automatic
+    if (modes_.isAutomatic()) {
+        // REMOTE degrades to self-contained SOLAR when the phone goes quiet.
+        if (modes_.mode() == Mode::kRemote &&
+            (now_ms - remote_target_ms_) > cfg_.remote_timeout_ms) {
+            faults |= kFaultRemoteStale;
+            modes_.degrade(Mode::kSolar, "remote_stale", now_ms);
+            controller_.reset();
+        }
+
+        // The battery-side protection envelope produces a command ceiling
+        // and, at the stop stages, a graceful drop to MANUAL.
+        guard = guard_.update(battery, dt_s);
+        faults |= guard.faults;
+        if (guard.stop) {
+            forceManual("battery_protect", now_ms);
+        }
+    }
     if (modes_.isAutomatic()) {
         target_w = modes_.targetBatteryPower(battery.soc_pct);
         if (modes_.reserveActive()) {
             faults |= kFaultSocAtReserve;
         }
-        out.motor_cmd_pct =
-            controller_.update(battery.power_w, target_w, dt_s);
+        if (modes_.mode() == Mode::kRemote && !modes_.reserveActive()) {
+            // Execute the phone's power target open-loop through the same
+            // ramps and ceiling; at the reserve floor REMOTE behaves like
+            // SOLAR (net battery discharge is refused).
+            float desired_pct =
+                remote_target_w_ / cfg_.motor_max_power_w * 100.0f;
+            if (desired_pct > guard.ceiling_pct) {
+                desired_pct = guard.ceiling_pct;
+            }
+            if (desired_pct > cfg_.max_motor_cmd_pct) {
+                desired_pct = cfg_.max_motor_cmd_pct;
+            }
+            out.motor_cmd_pct = remote_ramp_.update(desired_pct, dt_s);
+        } else {
+            out.motor_cmd_pct = controller_.update(
+                battery.power_w, target_w, dt_s, guard.ceiling_pct);
+            remote_ramp_.reset(out.motor_cmd_pct);
+        }
         out.auto_active = true;
     } else {
         out.motor_cmd_pct = 0.0f;  // MANUAL: automatic output is always zero
