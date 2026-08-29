@@ -67,8 +67,45 @@ core on the boat is the single control authority.
   the first live fetch should be sanity-checked in the browser — any
   mismatch degrades gracefully to the labelled clear-sky fallback.
 
+## Planner v2 — A→B voyages (implemented)
+
+The "Voyage A→B" section implements the V1 slice of
+docs/GLOBAL_ADAPTIVE_ROUTE_PLANNER_RESEARCH.md on top of four new
+modules, all pure and unit-tested to the same 100 % gate:
+
+- `js/providers.js` — global-first environment layer. A provider
+  registry (Tier 0: Open-Meteo weather + Open-Meteo Marine + a clear-sky
+  model) feeds `getVoyageEnvironment()`, which merges hourly solar, wind,
+  wave and ocean-current series with per-variable source metadata and a
+  coverage score. Every capability degrades independently: losing the
+  marine API keeps live wind; losing everything still yields clear-sky
+  solar so the planner always runs — the safety gates just say so.
+  Currents are unit-converted (km/h → m/s) and sanity-clamped.
+- `js/vessel_model.js` — the learning vessel model: NNLS-fitted monotone
+  hull curve (P = b1·v + b3·v³), PAVA isotonic cross-check, steady-state
+  block gating for trustworthy samples, CUSUM drift detection, and
+  calibrated error quantiles (conservative defaults until ≥10 logged
+  prediction-vs-actual records exist).
+- `js/route_planner.js` — waypoint segmentation (≤2 km), crab-compensated
+  speed-over-ground through current vectors, apparent-wind and wave-height
+  power penalties (placeholder priors until the residual model learns),
+  and the (segment, time-bucket) → max-SOC dynamic program. Waiting (P=0)
+  at the dock or any `anchor` waypoint makes departure-window sweeps and
+  solar stops emerge from the same pass; the destination row is the full
+  arrival-time ↔ arrival-SOC Pareto curve.
+- `js/voyage_safety.js` — the SAFE / POSSIBLE / INFEASIBLE verdict as six
+  explicit pass/fail gates (forecast coverage, freshness, current data,
+  reserve-by-construction, adverse-case arrival vs a 10 % hard floor,
+  calibrated uncertainty), always rendered with the plan.
+
+The voyage UI (`js/voyage_ui.js`) reads waypoints as `lat, lon[, anchor]`
+lines, fetches the environment for the route midpoint (legs are short in
+V1), and renders verdict, gates, summary cards and the Pareto table.
+
 ## Next steps (see docs/ROADMAP.md)
 
 Live boat link (ESP32 Wi-Fi API) for real telemetry and automatic curve
-sync; route legs with per-leg bearings so wind becomes directional; solar
-forecast blending (cloud cover × clear-sky when radiation is missing).
+sync — the ESP32 executes and protects; the phone does all heavy
+planning/learning and streams only a power target (REMOTE mode). Then:
+per-segment environment sampling for long routes, H3 geographic residual
+learning, provider historical-error learning, FES2022 offline tide packs.

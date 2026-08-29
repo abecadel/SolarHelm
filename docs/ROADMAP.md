@@ -43,7 +43,10 @@ tuning; RANGE mode implementation on the measured curve.
 - solar + weather forecast feeding an on-board energy budget (ARRIVAL mode
   with destination SOC, "energy budget by sunset")
 - planner app ↔ boat live link (ESP32 Wi-Fi API: telemetry out, curve sync)
-- route planning, wind/current compensation
+- ~~route planning, wind/current compensation~~ ✅ planner v2 in the PWA:
+  global-first providers (waves + ocean currents), learned hull model,
+  (segment, time) → max-SOC route DP with departure sweep and solar stops,
+  SAFE/POSSIBLE/INFEASIBLE gates (see docs/COMPANION_APP.md)
 - NMEA 2000 and Signal K integration; autopilot coupling
 - VESC / CAN / PWM throttle drivers; multiple motors; regen where supported
 - cloud-edge prediction from PV slope; ML hull-efficiency model

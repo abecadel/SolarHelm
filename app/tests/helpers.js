@@ -89,3 +89,34 @@ export function openMeteoPayload(days = 1) {
     },
   };
 }
+
+/** Open-Meteo weather payload including the planner-v2 wind fields. */
+export function windPayload(days = 1) {
+  const p = openMeteoPayload(days);
+  const n = p.hourly.time.length;
+  p.hourly.wind_direction_10m = new Array(n).fill(270);
+  p.hourly.wind_gusts_10m = new Array(n).fill(6);
+  return p;
+}
+
+/** A plausible Open-Meteo Marine hourly payload for `days` days. */
+export function marinePayload(days = 1, { currentKmh = 1.8 } = {}) {
+  const time = [];
+  for (let h = 0; h < days * 24; h++) {
+    const d = new Date(Date.UTC(2026, 5, 21, 0, 0));
+    d.setUTCHours(h);
+    time.push(d.toISOString().slice(0, 16));
+  }
+  const n = time.length;
+  return {
+    hourly: {
+      time,
+      wave_height: new Array(n).fill(0.4),
+      wave_direction: new Array(n).fill(315),
+      wave_period: new Array(n).fill(4),
+      wind_wave_height: new Array(n).fill(0.3),
+      ocean_current_velocity: new Array(n).fill(currentKmh),
+      ocean_current_direction: new Array(n).fill(90),
+    },
+  };
+}

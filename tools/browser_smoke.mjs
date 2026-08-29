@@ -58,8 +58,9 @@ page.on('console', (m) => {
     errors.push(`console: ${m.text()}`);
   }
 });
-// Block the real forecast API: the app must fall back to clear-sky.
+// Block the real forecast APIs: the app must fall back to clear-sky.
 await page.route('**/api.open-meteo.com/**', (r) => r.abort());
+await page.route('**/marine-api.open-meteo.com/**', (r) => r.abort());
 
 let failures = 0;
 const check = (cond, label) => {
@@ -83,6 +84,20 @@ check(chartCount === 3, `planner renders 3 charts (got ${chartCount})`);
 const status = await page.textContent('#status');
 check(status.includes('clear-sky') || status.includes('Offline'),
       `offline fallback engaged (“${status.trim()}”)`);
+
+// --- Voyage planner (planner v2) ---
+await page.fill('#waypoints', '43.5081, 16.4402, anchor\n43.5300, 16.4402');
+await page.click('#voyage-plan');
+await page.waitForFunction(
+    () => document.querySelector('#voyage-summary').innerHTML.length > 100,
+    null, { timeout: 30000 });
+const voyage = await page.innerHTML('#voyage-summary');
+check(voyage.includes('verdict'), 'voyage planner renders a verdict');
+check(voyage.includes('forecast-coverage'),
+      'voyage planner renders the safety gates');
+const voyageStatus = await page.textContent('#voyage-status');
+check(voyageStatus.includes('wind'),
+      `voyage environment status shown (“${voyageStatus.trim()}”)`);
 
 // --- Website landing page ---
 await page.goto(`${base}/index.html`);

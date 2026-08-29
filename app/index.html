@@ -24,8 +24,19 @@
   .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
           gap: 8px; }
   label { display: block; font-size: .75rem; color: #4a5c6b; }
-  input, select { width: 100%; padding: 6px 8px; border: 1px solid var(--line);
+  input, select, textarea { width: 100%; padding: 6px 8px;
+                  border: 1px solid var(--line);
                   border-radius: 6px; font: inherit; background: #fff; }
+  textarea { font-family: ui-monospace, monospace; font-size: .85rem;
+             resize: vertical; }
+  ul.gates { list-style: none; margin: 8px 0; padding: 0; font-size: .8rem; }
+  ul.gates li { padding: 4px 8px; border-radius: 6px; margin-bottom: 4px; }
+  ul.gates li.ok { background: #e2f2e8; color: var(--ok); }
+  ul.gates li.warn { background: #fbe9dd; color: var(--warn); }
+  #voyage-plan { background: var(--accent); color: #fff; width: 100%;
+                 margin-top: 4px; }
+  #voyage-status { font-size: .8rem; color: #4a5c6b; min-height: 1.2em;
+                   margin: 8px 2px; }
   button { padding: 9px 16px; border: 0; border-radius: 8px; font: inherit;
            font-weight: 600; cursor: pointer; }
   #plan { background: var(--sun); color: #3a2800; width: 100%; margin-top: 4px; }
@@ -115,6 +126,24 @@
   <p id="status"></p>
   <section id="summary"></section>
   <section id="charts"></section>
+  <fieldset>
+    <legend>Voyage A→B (waves, currents, departure window)</legend>
+    <label for="waypoints">Waypoints — one <code>lat, lon</code> per line;
+      append <code>, anchor</code> where you could stop and recharge</label>
+    <textarea id="waypoints" rows="4"
+      placeholder="43.5081, 16.4402, anchor&#10;43.3908, 16.2911"></textarea>
+    <div class="grid">
+      <div><label for="objective">Objective</label>
+        <select id="objective">
+          <option value="maxSoc">Arrive with max battery</option>
+          <option value="earliest">Arrive earliest (keeping reserve)</option>
+        </select></div>
+      <div><label>&nbsp;</label>
+        <button id="voyage-plan">Plan voyage</button></div>
+    </div>
+    <p id="voyage-status"></p>
+    <section id="voyage-summary"></section>
+  </fieldset>
   <footer>
     SolarHelm Planner is advisory only — it never controls the boat.
     Forecast: open-meteo.com (falls back to a clear-sky model offline).
