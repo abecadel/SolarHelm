@@ -22,18 +22,19 @@ export const BOAT_CLASSES = {
   pontoon: { label: 'Pontoon / heavy daysailer (~900 kg)', dragScale: 1.7 },
 };
 
-/** Reference component prices in PLN (docs/BUYING_GUIDE.md, 2026-08). */
+/** Reference component prices in PLN (docs/BUYING_GUIDE.md, snapshot
+ *  2026-08-29; EUR at 4.34 PLN). */
 export const COSTS_PLN = {
-  motor_drive: 980,        // Storm N86-class trolling motor
-  motor_controller: 629,   // Kelly KDS24100E-class
-  controller_kit: 400,     // ESP32-S3 + DAC + GNSS + wiring + interface parts
-  shunt: 420,              // Victron SmartShunt 500 A
-  safety_kit: 450,         // kill switch, contactor, fuses, disconnect
-  battery_per_kwh: 800,    // 24 V LiFePO4 with BMS, per kWh
-  panel_450w: 360,         // rigid residential ~450 W module
-  mppt_per_kw: 650,        // telemetry-capable MPPT per kW of PV
-  mounting_per_panel: 150, // rails/hardware per panel
-  dcdc_and_wiring: 500,    // DC/DC 24→12, marine cable, glands, enclosure
+  motor_drive: 990,        // Storm N86 24 V trolling motor (bezwiosel.pl)
+  motor_controller: 879,   // Kelly KDS24100E (kellycontrollers.eu, EUR 202.46)
+  controller_kit: 414,     // ESP32-S3 + GP8403 DAC + NEO-M8N + relay + misc
+  shunt: 389,              // Victron SmartShunt 500 A IP65 (Ceneo floor)
+  safety_kit: 434,         // SW80 contactor + ANL fuse + switch + kill switch
+  battery_per_kwh: 750,    // 24 V LFP w/ 100 A BMS (WattCycle..LiTime band)
+  panel_450w: 280,         // Jinko Tiger Neo 450 W wholesale (0.62 PLN/W)
+  mppt_per_kw: 500,        // Victron SmartSolar 100/30 = 434 PLN per ~0.88 kW
+  mounting_per_panel: 150, // rails/clamps/backing per panel
+  dcdc_and_wiring: 500,    // DC/DC rails, marine cable, glands, enclosure
 };
 
 /** Scales the reference hull curve for a boat class. */
