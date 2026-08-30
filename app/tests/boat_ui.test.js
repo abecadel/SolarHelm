@@ -165,6 +165,54 @@ test('initBoat wires connect/disconnect polling and CSV export',
   assert.equal(state.link.label, DEFAULT_BOAT_URL);
 });
 
+test('a second click during a pending BLE connect is ignored', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  let connects = 0;
+  const deps = boatDeps(okTelemetry(), { 'boat-transport': 'ble' });
+  deps.bluetooth = {
+    requestDevice: async () => {
+      connects += 1;
+      await gate;
+      throw new Error('chooser cancelled');
+    },
+  };
+  const state = initBoat(deps);
+  const first = fire(deps.doc, 'boat-connect', 'click');
+  await Promise.resolve(); // first click is now awaiting the chooser
+  await fire(deps.doc, 'boat-connect', 'click'); // must be a no-op
+  assert.equal(connects, 1);
+  release();
+  await first;
+  assert.equal(state.link, null); // cancelled cleanly
+  assert.equal(state.connecting, false);
+  assert.ok(deps.doc.getElementById('boat-status').textContent
+      .includes('chooser cancelled'));
+});
+
+test('disconnect during the first poll leaves no zombie timer', async () => {
+  let releasePoll;
+  const pollGate = new Promise((r) => { releasePoll = r; });
+  const deps = boatDeps(async (url) => {
+    if (url.endsWith('/telemetry')) {
+      await pollGate;
+      return { ok: true, json: async () => SAMPLE };
+    }
+    return { ok: true };
+  });
+  const state = initBoat(deps);
+  const first = fire(deps.doc, 'boat-connect', 'click');
+  // Let the link build (sync for HTTP) and the first poll start pending.
+  await Promise.resolve();
+  await Promise.resolve();
+  await fire(deps.doc, 'boat-connect', 'click'); // disconnect mid-poll
+  assert.equal(state.link, null);
+  releasePoll();
+  await first;
+  assert.equal(state.timer, null);          // never armed
+  assert.equal(deps._timers.set.length, 0); // no zombie interval
+});
+
 test('mixed content and missing Bluetooth produce clear guidance',
      async () => {
   const https = boatDeps(okTelemetry());

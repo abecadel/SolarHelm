@@ -10,7 +10,12 @@ import {
   httpLink,
   mixedContentBlocked,
 } from '../js/ble_link.js';
-import { CACHE_PREFIX, CACHE_TTL_H, cachedFetch } from '../js/net_cache.js';
+import {
+  CACHE_PREFIX,
+  CACHE_TTL_H,
+  cachedFetch,
+  evictCache,
+} from '../js/net_cache.js';
 import { makeStorage } from './helpers.js';
 
 // --- transports ----------------------------------------------------------
@@ -142,6 +147,64 @@ test('cachedFetch stores successful GETs and replays them offline',
   const replay = await f(URL1);
   assert.ok(Math.abs(replay.cachedAgeH - 3) < 1e-9);
   assert.deepEqual(await replay.json(), { v: 42 });
+});
+
+test('cachedFetch evicts expired entries and survives quota pressure',
+     async () => {
+  const storage = makeStorage();
+  let t = 0;
+  const ok = cachedFetch(async () => ({ ok: true,
+                                        json: async () => ({ v: 1 }) }),
+                         storage, () => t);
+  await ok('u1');
+  await ok('u2');
+  t += (CACHE_TTL_H + 1) * 3.6e6;
+  await ok('u3'); // routine sweep on write clears the stale pair
+  assert.equal(storage.getItem(CACHE_PREFIX + 'u1'), null);
+  assert.equal(storage.getItem(CACHE_PREFIX + 'u2'), null);
+  assert.ok(storage.getItem(CACHE_PREFIX + 'u3'));
+
+  // Quota pressure: setItem fails for new keys once 2 entries exist —
+  // the cache sacrifices everything else for the newest payload.
+  const inner = makeStorage();
+  const quota = {
+    getItem: (k) => inner.getItem(k),
+    removeItem: (k) => inner.removeItem(k),
+    get length() { return inner.length; },
+    key: (i) => inner.key(i),
+    setItem: (k, v) => {
+      if (inner.length >= 2 && inner.getItem(k) === null) {
+        throw new Error('QuotaExceeded');
+      }
+      inner.setItem(k, v);
+    },
+  };
+  const q = cachedFetch(async () => ({ ok: true,
+                                       json: async () => ({ v: 2 }) }),
+                        quota, () => t);
+  await q('a');
+  await q('b');
+  await q('c'); // quota hit -> evict-all-but-newest -> retry succeeds
+  assert.equal(inner.length, 1);
+  assert.ok(inner.getItem(CACHE_PREFIX + 'c'));
+});
+
+test('evictCache counts corrupt entries and survives broken storage',
+     () => {
+  const storage = makeStorage({
+    [`${CACHE_PREFIX}fresh`]: JSON.stringify({ t: 0, payload: 1 }),
+    [`${CACHE_PREFIX}corrupt`]: '{nope',
+    unrelated: 'left alone',
+  });
+  assert.equal(evictCache(storage, 1000), 1); // corrupt only; fresh kept
+  assert.ok(storage.getItem(`${CACHE_PREFIX}fresh`));
+  assert.equal(storage.getItem('unrelated'), 'left alone');
+  assert.equal(
+      evictCache(storage, 0, { all: true,
+                               keepKey: `${CACHE_PREFIX}fresh` }),
+      0); // nothing but the keeper remains
+  const broken = { get length() { throw new Error('blocked'); } };
+  assert.equal(evictCache(broken, 0), 0);
 });
 
 test('cachedFetch works with the default wall clock', async () => {

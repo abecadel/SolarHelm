@@ -115,6 +115,33 @@ test('detectSteadyBlocks gates on power CV, speed SD, floor values and settling'
   assert.ok(Math.abs(blocks[1].powerW - 505) < 1e-9);
 });
 
+test('block positions average only real fixes (no NaN, no null island)',
+     () => {
+  const rows = [];
+  let t = 0;
+  const push = (n, lat, lon) => {
+    for (let s = 0; s < n; s++) {
+      const row = { t_s: t, speedKmh: 5, powerW: 500 };
+      if (lat !== undefined) {
+        row.lat = lat;
+        row.lon = lon;
+      }
+      rows.push(row);
+      t += 1;
+    }
+  };
+  push(30, 43.5, 16.4);       // settling block, discarded
+  push(10, 43.5, 16.4);       // accepted block: 10 fixes...
+  push(10, 0, 0);             // ...10 no-fix sentinels...
+  push(10, undefined);        // ...10 truncated rows without lat
+  push(30, 0, 0);             // accepted block with no real fix at all
+  const blocks = detectSteadyBlocks(rows, { blockS: 30 });
+  assert.equal(blocks.length, 2);
+  assert.ok(Math.abs(blocks[0].lat - 43.5) < 1e-9); // mean of fixes only
+  assert.ok(Number.isFinite(blocks[0].lon));
+  assert.equal(blocks[1].lat, undefined); // sentinel-only: no position
+});
+
 test('detectSteadyBlocks defaults: 90 s blocks accepted after one settles',
      () => {
   const rows = [...steadyRows(0, 90, 5, 500), ...steadyRows(90, 90, 5, 500)];

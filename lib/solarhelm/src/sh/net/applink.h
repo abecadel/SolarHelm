@@ -59,6 +59,7 @@ int writeConfigJson(const ControlConfig& cfg, char* buf, size_t buf_len);
 
 struct ConfigPatchResult {
     bool valid = false;         // patch parsed AND validated
+    bool malformed = false;     // a recognized key had an unparsable value
     int fields_applied = 0;     // recognized keys with finite values
     ConfigError error = ConfigError::kNone;  // validation verdict
 };

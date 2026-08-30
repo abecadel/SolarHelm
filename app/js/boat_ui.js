@@ -5,13 +5,13 @@
 // order) so the Model tab's learner consumes it unchanged.
 
 import {
+  DEFAULT_BOAT_URL,
   bleSupported,
   connectBle,
-  httpLink,
-  mixedContentBlocked,
+  guardedHttpLink,
 } from './ble_link.js';
 
-export const DEFAULT_BOAT_URL = 'http://192.168.4.1';
+export { DEFAULT_BOAT_URL };
 export const POLL_MS = 1000;
 
 export const MODE_NAMES = ['MANUAL', 'SOLAR', 'SOLAR+', 'REMOTE'];
@@ -121,7 +121,7 @@ export async function sendRemote(deps, state) {
   }
 }
 
-async function buildLink(deps, state) {
+async function buildLink(deps) {
   const doc = deps.doc;
   const transport = doc.getElementById('boat-transport').value;
   if (transport === 'ble') {
@@ -131,23 +131,19 @@ async function buildLink(deps, state) {
     }
     return connectBle(deps.bluetooth);
   }
-  const base = (doc.getElementById('boat-url').value || DEFAULT_BOAT_URL)
-      .replace(/\/+$/, '');
-  if (mixedContentBlocked(deps.pageProtocol, base)) {
-    throw new Error('this HTTPS page cannot call the boat over plain ' +
-                    'HTTP - pick Bluetooth, or open the app from the ' +
-                    `boat itself at ${base}/`);
-  }
   // The boat link must NEVER go through the offline cache: stale
   // telemetry is worse than none.
-  return httpLink(deps.rawFetch ?? deps.fetchImpl, base);
+  return guardedHttpLink(deps.rawFetch ?? deps.fetchImpl,
+                         doc.getElementById('boat-url').value,
+                         deps.pageProtocol);
 }
 
 /** Wires the Boat tab. deps adds: bluetooth, pageProtocol, setIntervalFn,
  *  clearIntervalFn, download(filename, text). Returns the tab state. */
 export function initBoat(deps) {
   const doc = deps.doc;
-  const state = { link: null, samples: [], timer: null };
+  const state = { link: null, samples: [], timer: null,
+                  connecting: false };
   doc.getElementById('boat-url').value = DEFAULT_BOAT_URL;
 
   const stop = () => {
@@ -163,6 +159,7 @@ export function initBoat(deps) {
   };
 
   doc.getElementById('boat-connect').addEventListener('click', async () => {
+    if (state.connecting) return; // a connect is already in flight
     if (state.timer !== null || state.link) {
       stop();
       doc.getElementById('boat-status').textContent =
@@ -170,16 +167,23 @@ export function initBoat(deps) {
       return;
     }
     doc.getElementById('boat-status').textContent = 'Connecting…';
+    state.connecting = true;
     try {
-      state.link = await buildLink(deps, state);
+      state.link = await buildLink(deps);
     } catch (err) {
       doc.getElementById('boat-status').textContent =
           `${err && err.message ? err.message : err}`;
       return;
+    } finally {
+      state.connecting = false;
     }
     doc.getElementById('boat-connect').textContent = 'Disconnect';
     await pollOnce(deps, state);
-    state.timer = deps.setIntervalFn(() => pollOnce(deps, state), POLL_MS);
+    // The user may have hit Disconnect during the first poll.
+    if (state.link) {
+      state.timer = deps.setIntervalFn(() => pollOnce(deps, state),
+                                       POLL_MS);
+    }
   });
 
   doc.getElementById('boat-send').addEventListener('click',

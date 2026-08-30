@@ -4,11 +4,10 @@
 // must know which boat produced which data), persists locally.
 // Boat-side NVS sync is bench-gated work; the tab says so honestly.
 
-import { httpLink, mixedContentBlocked } from './ble_link.js';
+import { DEFAULT_BOAT_URL, guardedHttpLink } from './ble_link.js';
 import { profileValid } from './profile.js';
 
 export const PROFILE_STORAGE_KEY = 'solarhelm.profile.v1';
-export const DEFAULT_BOAT_URL = 'http://192.168.4.1';
 
 export function curveToText(curve) {
   return curve.map(([v, whkm]) => `${v}, ${whkm}`).join('\n');
@@ -115,15 +114,9 @@ export function applyStoredProfile(deps, state) {
 // the boat's own network; a mixed-content page gets clear guidance.
 
 function boatConfigLink(deps) {
-  const doc = deps.doc;
-  const base = (doc.getElementById('setup-boat-url').value ||
-                DEFAULT_BOAT_URL).replace(/\/+$/, '');
-  if (mixedContentBlocked(deps.pageProtocol, base)) {
-    throw new Error('this HTTPS page cannot call the boat over plain ' +
-                    `HTTP - open the app from the boat at ${base}/ to ` +
-                    'configure it');
-  }
-  return httpLink(deps.rawFetch ?? deps.fetchImpl, base);
+  return guardedHttpLink(deps.rawFetch ?? deps.fetchImpl,
+                         deps.doc.getElementById('setup-boat-url').value,
+                         deps.pageProtocol);
 }
 
 export async function loadBoatConfig(deps) {

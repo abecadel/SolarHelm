@@ -61,6 +61,36 @@ TEST(telemetry_json_reports_truncation) {
     CHECK(n >= static_cast<int>(sizeof(tiny)));  // snprintf-style contract
 }
 
+TEST(telemetry_json_worst_case_fits_the_firmware_buffer) {
+    // The firmware serves the record from a 768-byte buffer; a pessimal
+    // record (max timestamp, negative multi-digit powers, huge daily Wh,
+    // silly efficiency, full-precision position) must fit.
+    TelemetryRecord r;
+    r.timestamp_ms = 4294967295u;
+    r.mode = 255;
+    r.battery_voltage_v = -99.99f;
+    r.battery_current_a = -999.99f;
+    r.battery_power_w = -99999.9f;
+    r.battery_soc_pct = 100.0f;
+    r.solar_power_w = 99999.9f;
+    r.motor_command_pct = 100.0f;
+    r.motor_estimated_power_w = 99999.9f;
+    r.speed_kmh = 99.99f;
+    r.distance_today_km = 9999.9999f;
+    r.energy_solar_today_wh = 9999999.0f;
+    r.energy_motor_today_wh = 9999999.0f;
+    r.energy_hotel_today_wh = 9999999.0f;
+    r.efficiency_wh_km = 99999999.0f;
+    r.reserve_soc_pct = 100.0f;
+    r.fault_flags = 0xFFFF;
+    r.latitude_deg = -89.999999;
+    r.longitude_deg = -179.999999;
+    char buf[768];
+    const int n = sh::writeTelemetryJson(r, buf, sizeof(buf));
+    CHECK(n > 0);
+    CHECK(n < static_cast<int>(sizeof(buf)));
+}
+
 TEST(remote_command_accepts_a_plain_target) {
     const char body[] = "{\"target_w\": 350.5}";
     const RemoteCommand c = sh::parseRemoteCommand(body, sizeof(body) - 1);
@@ -163,12 +193,17 @@ TEST(config_patch_rejects_bad_input) {
     CHECK(!sh::applyConfigPatch(cfg, nullptr, 4, &out).valid);
     CHECK(!sh::applyConfigPatch(cfg, "{\"sag_soft_v\": 20}", 18,
                                 &out).valid);  // envelope not writable
-    // Recognized key, malformed value: whole patch rejected.
+    // Recognized key, malformed value: whole patch rejected, and the
+    // rejection says WHY (the firmware surfaces `malformed`).
     const char bad[] = "{\"deadband_w\": nan}";
-    CHECK(!sh::applyConfigPatch(cfg, bad, sizeof(bad) - 1, &out).valid);
+    const auto mal = sh::applyConfigPatch(cfg, bad, sizeof(bad) - 1, &out);
+    CHECK(!mal.valid);
+    CHECK(mal.malformed);
     const char nocolon[] = "{\"deadband_w\" 40}";
-    CHECK(!sh::applyConfigPatch(cfg, nocolon, sizeof(nocolon) - 1,
-                                &out).valid);
+    CHECK(sh::applyConfigPatch(cfg, nocolon, sizeof(nocolon) - 1,
+                               &out).malformed);
+    // Empty/unknown patches are invalid but NOT malformed.
+    CHECK(!sh::applyConfigPatch(cfg, "{}", 2, &out).malformed);
     // Valid syntax, invalid semantics: core validation is the gate.
     const char invalid[] = "{\"deadband_w\": -5}";
     const auto r = sh::applyConfigPatch(cfg, invalid, sizeof(invalid) - 1,

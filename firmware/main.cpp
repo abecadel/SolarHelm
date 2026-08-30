@@ -98,8 +98,18 @@ uint32_t g_last_tick_ms = 0;
 bool g_heartbeat_level = false;
 bool g_auto_switch_stable = false;  // debounced: true = AUTO enabled
 bool g_auto_switch_last_raw = false;
-char g_telemetry_json[512] = "{}";
+// 768: worst-case record (10-digit timestamp, negative powers, 5-digit
+// daily Wh, %.6f position) stays well inside; overflow is checked anyway.
+char g_telemetry_json[768] = "{}";
 BLECharacteristic* g_ble_telemetry = nullptr;
+
+// The BLE stack runs on its own FreeRTOS task; the Helm runs on the loop
+// task. NOTHING from BLE may touch the Helm directly — writes are queued
+// under this lock and consumed by loop(), and telemetry is snapshotted
+// under it for GATT reads.
+portMUX_TYPE g_link_mux = portMUX_INITIALIZER_UNLOCKED;
+char g_ble_remote_body[128];
+size_t g_ble_remote_len = 0;  // 0 = no pending command
 
 // NVS keys are index-based ("f0".."fN": NVS caps keys at 15 chars, our
 // field names don't fit). The namespace carries a version so a change to
@@ -146,9 +156,29 @@ void applyRemoteBody(const char* body, size_t len) {
 
 class BleRemoteCallbacks : public BLECharacteristicCallbacks {
 public:
+    // BLE task context: queue the body for the loop task, never touch
+    // the Helm from here (see g_link_mux).
     void onWrite(BLECharacteristic* c) override {
         const std::string v = c->getValue();
-        applyRemoteBody(v.c_str(), v.size());
+        if (v.empty() || v.size() >= sizeof(g_ble_remote_body)) return;
+        taskENTER_CRITICAL(&g_link_mux);
+        memcpy(g_ble_remote_body, v.data(), v.size());
+        g_ble_remote_len = v.size();
+        taskEXIT_CRITICAL(&g_link_mux);
+    }
+};
+
+class BleTelemetryCallbacks : public BLECharacteristicCallbacks {
+public:
+    // BLE task context: snapshot the JSON under the lock right before
+    // the read is served, so the phone never sees a torn record.
+    void onRead(BLECharacteristic* c) override {
+        char snap[sizeof(g_telemetry_json)];
+        taskENTER_CRITICAL(&g_link_mux);
+        memcpy(snap, g_telemetry_json, sizeof(snap));
+        taskEXIT_CRITICAL(&g_link_mux);
+        snap[sizeof(snap) - 1] = '\0';
+        c->setValue(reinterpret_cast<uint8_t*>(snap), strlen(snap));
     }
 };
 
@@ -207,10 +237,13 @@ void handleConfigPost() {
     const sh::ConfigPatchResult r =
         sh::applyConfigPatch(g_config, body.c_str(), body.length(), &next);
     if (!r.valid) {
+        const char* why = r.malformed ? "malformed-value"
+            : r.fields_applied == 0 ? "no-known-fields"
+                                    : sh::configErrorName(r.error);
         char err[128];
         snprintf(err, sizeof(err),
                  "{\"ok\":false,\"error\":\"%s\",\"fields\":%d}",
-                 sh::configErrorName(r.error), r.fields_applied);
+                 why, r.fields_applied);
         g_server.send(400, "application/json", err);
         return;
     }
@@ -267,11 +300,15 @@ void controlTick(uint32_t now_ms, float dt_s) {
     }
     digitalWrite(kPinStatusLed, out.auto_active ? HIGH : LOW);
 
-    sh::writeTelemetryJson(out.telemetry, g_telemetry_json,
-                           sizeof(g_telemetry_json));
-    if (g_ble_telemetry != nullptr) {
-        g_ble_telemetry->setValue(g_telemetry_json);
+    char json[sizeof(g_telemetry_json)];
+    const int n = sh::writeTelemetryJson(out.telemetry, json, sizeof(json));
+    if (n <= 0 || static_cast<size_t>(n) >= sizeof(json)) {
+        snprintf(json, sizeof(json), "{\"error\":\"telemetry-overflow\"}");
     }
+    taskENTER_CRITICAL(&g_link_mux);
+    memcpy(g_telemetry_json, json, sizeof(g_telemetry_json));
+    taskEXIT_CRITICAL(&g_link_mux);
+    // BLE reads snapshot g_telemetry_json in their own onRead callback.
 }
 
 }  // namespace
@@ -325,6 +362,7 @@ void setup() {
     BLEService* ble_service = ble_server->createService(kBleService);
     g_ble_telemetry = ble_service->createCharacteristic(
         kBleTelemetryChar, BLECharacteristic::PROPERTY_READ);
+    g_ble_telemetry->setCallbacks(new BleTelemetryCallbacks());
     g_ble_telemetry->setValue(g_telemetry_json);
     BLECharacteristic* ble_remote = ble_service->createCharacteristic(
         kBleRemoteChar, BLECharacteristic::PROPERTY_WRITE);
@@ -346,6 +384,19 @@ void loop() {
     const uint32_t now_ms = millis();
     pumpSerialInputs(now_ms);
     g_server.handleClient();
+    // Consume a BLE-queued REMOTE command on THIS task (see g_link_mux).
+    char remote[sizeof(g_ble_remote_body)];
+    size_t remote_len = 0;
+    taskENTER_CRITICAL(&g_link_mux);
+    if (g_ble_remote_len > 0) {
+        remote_len = g_ble_remote_len;
+        memcpy(remote, g_ble_remote_body, remote_len);
+        g_ble_remote_len = 0;
+    }
+    taskEXIT_CRITICAL(&g_link_mux);
+    if (remote_len > 0) {
+        applyRemoteBody(remote, remote_len);
+    }
     if (now_ms - g_last_tick_ms < kControlPeriodMs) {
         return;
     }

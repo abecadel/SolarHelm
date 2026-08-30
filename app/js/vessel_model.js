@@ -154,15 +154,24 @@ export function detectSteadyBlocks(rows, opts = {}) {
                sdV <= maxSpeedSd;
     if (ok && !lastRejected) {
       const block = { stwKmh: meanV, powerW: meanP, n };
-      if (typeof rows[start].lat === 'number') {
-        let sumLat = 0;
-        let sumLon = 0;
-        for (let i = start; i < end; i++) {
-          sumLat += rows[i].lat;
-          sumLon += rows[i].lon;
+      // Average only rows with a real fix: rows without lat/lon (e.g. a
+      // truncated log line) must not NaN the mean, and (0,0) no-fix
+      // sentinel rows must not drag it toward null island.
+      let sumLat = 0;
+      let sumLon = 0;
+      let nFix = 0;
+      for (let i = start; i < end; i++) {
+        const r = rows[i];
+        if (Number.isFinite(r.lat) && Number.isFinite(r.lon) &&
+            (r.lat !== 0 || r.lon !== 0)) {
+          sumLat += r.lat;
+          sumLon += r.lon;
+          nFix += 1;
         }
-        block.lat = sumLat / n;
-        block.lon = sumLon / n;
+      }
+      if (nFix > 0) {
+        block.lat = sumLat / nFix;
+        block.lon = sumLon / nFix;
       }
       blocks.push(block);
     }

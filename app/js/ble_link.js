@@ -15,6 +15,8 @@ export const BLE_SERVICE = '0b3d5c00-e8a0-4013-9c60-1c3d5c000001';
 export const BLE_TELEMETRY = '0b3d5c00-e8a0-4013-9c60-1c3d5c000002';
 export const BLE_REMOTE = '0b3d5c00-e8a0-4013-9c60-1c3d5c000003';
 
+export const DEFAULT_BOAT_URL = 'http://192.168.4.1';
+
 export function bleSupported(bluetooth) {
   return !!bluetooth;
 }
@@ -23,6 +25,18 @@ export function bleSupported(bluetooth) {
  *  boat) — the case Bluetooth exists to solve. */
 export function mixedContentBlocked(pageProtocol, baseUrl) {
   return pageProtocol === 'https:' && baseUrl.startsWith('http://');
+}
+
+/** The one place that normalizes a boat URL, applies the mixed-content
+ *  guard, and builds the HTTP link (shared by the Boat and Setup tabs). */
+export function guardedHttpLink(fetchImpl, rawUrl, pageProtocol) {
+  const base = (rawUrl || DEFAULT_BOAT_URL).replace(/\/+$/, '');
+  if (mixedContentBlocked(pageProtocol, base)) {
+    throw new Error('this HTTPS page cannot call the boat over plain ' +
+                    'HTTP - use Bluetooth for live data, or open the ' +
+                    `app from the boat at ${base}/`);
+  }
+  return httpLink(fetchImpl, base);
 }
 
 /** HTTP transport against the boat's SoftAP API. */

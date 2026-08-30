@@ -176,7 +176,10 @@ ConfigPatchResult applyConfigPatch(const ControlConfig& current,
         double value = 0.0;
         const int rc = findNumberField(body, len, kConfigFields[i].name,
                                        &value);
-        if (rc < 0) return result;  // present but malformed: reject all
+        if (rc < 0) {  // present but malformed: reject the whole patch
+            result.malformed = true;
+            return result;
+        }
         if (rc == 1) {
             candidate.*(kConfigFields[i].member) = static_cast<float>(value);
             ++result.fields_applied;
