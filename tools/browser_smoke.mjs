@@ -104,6 +104,16 @@ await page.goto(`${base}/index.html`);
 const h1 = await page.textContent('h1');
 check(h1.toLowerCase().includes('solarhelm'), 'site landing page renders');
 
+// --- Buying + installation guides ---
+await page.goto(`${base}/buying.html`);
+const buying = await page.content();
+check(buying.includes('BOM A') && buying.includes('5120'),
+      'buying guide renders the BOMs');
+await page.goto(`${base}/install.html`);
+const install = await page.content();
+check(install.includes('SmartShunt') && install.includes('MANUAL'),
+      'installation guide renders wiring rules');
+
 // --- Calculator ---
 await page.goto(`${base}/calculator.html`);
 await page.waitForSelector('#results .card', { timeout: 15000 });

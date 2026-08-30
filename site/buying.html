@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SolarHelm — buying guide</title>
+<meta name="description" content="Three costed build levels for a SolarHelm solar-electric boat: bench, drive system, solar cruiser. Prices in PLN.">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="app/icon.svg" type="image/svg+xml">
+</head>
+<body>
+<header class="hero">
+  <h1>BUYING GUIDE</h1>
+  <p class="tag">Three build levels for the 24&nbsp;V reference prototype.
+  Prices in PLN, snapshot 2026-08-29 — re-check listings before ordering.</p>
+  <a class="cta secondary" href="index.html">← SolarHelm</a>
+  <a class="cta secondary" href="install.html">Installation guide</a>
+  <a class="cta primary" href="https://github.com/abecadel/SolarHelm/blob/main/docs/BUYING_GUIDE.md">Full guide with links →</a>
+</header>
+<main>
+  <section>
+    <h2>How to buy</h2>
+    <p>Buy in three waves, gated by tests — never all at once. Wave&nbsp;1
+    is cheap electronics you validate on a desk. Wave&nbsp;2 (motor,
+    controller, battery) only after the bench works <b>and</b> after
+    opening the motor head to confirm its electrical topology. Wave&nbsp;3
+    (solar) only after sea trials give you a real efficiency curve. The
+    test protocol: <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/HARDWARE_TEST_PLAN.md">docs/HARDWARE_TEST_PLAN.md</a>.</p>
+  </section>
+  <section>
+    <h2>BOM A — bench, no boat (≈ 414 PLN)</h2>
+    <table class="days">
+      <tr><th>Item</th><th>PLN</th></tr>
+      <tr><td>ESP32-S3-DevKitC-1-N8R8</td><td>85</td></tr>
+      <tr><td>DFRobot GP8403 throttle DAC (DFR0971)</td><td>56</td></tr>
+      <tr><td>NEO-M8N GNSS board</td><td>70</td></tr>
+      <tr><td>Isolated 24→5 V module</td><td>35</td></tr>
+      <tr><td>Relay + socket, switch, LEDs, buzzer, breadboard, wires</td><td>~95</td></tr>
+      <tr><td>USB-UART adapter, RS485 + CAN modules, OLED</td><td>~73</td></tr>
+      <tr><td><b>Total</b></td><td><b>≈ 414</b></td></tr>
+    </table>
+    <p class="note">Add the Victron SmartShunt (389 PLN) from Wave 1 too —
+    it works on a bench supply and it is the control input, so don't wait
+    for the boat. Multimeter and bench PSU assumed owned.</p>
+  </section>
+  <section>
+    <h2>BOM B — drive system, no solar (≈ 5120 PLN)</h2>
+    <table class="days">
+      <tr><th>Item</th><th>PLN</th></tr>
+      <tr><td>STORM N86 24 V trolling motor</td><td>990</td></tr>
+      <tr><td>Kelly KDS24100E controller (0–5 V throttle)</td><td>879</td></tr>
+      <tr><td>WattCycle 24 V 100 Ah LiFePO4 (2.56 kWh)</td><td>1684</td></tr>
+      <tr><td>Victron SmartShunt 500 A IP65</td><td>389</td></tr>
+      <tr><td>BOM A electronics</td><td>~414</td></tr>
+      <tr><td>Albright SW80 contactor + ANL fuse + master switch + lanyard kill switch</td><td>~434</td></tr>
+      <tr><td>25 mm² cable, lugs, enclosure, clamp parts, helm pot</td><td>~330</td></tr>
+      <tr><td><b>Total</b></td><td><b>≈ 5120</b></td></tr>
+    </table>
+    <p class="note">Battery upgrade worth considering: LiTime 24 V 100 Ah
+    (+516 PLN) adds a 0&nbsp;°C charge cutoff and Bluetooth — recommended
+    for shoulder-season use. <b>Do not order the Kelly before opening the
+    Storm's head</b>: the conversion assumes a brushed motor with a
+    resistor-tap speed switch; verify by disassembly.</p>
+  </section>
+  <section>
+    <h2>BOM C — solar cruiser (≈ 7600–7700 PLN)</h2>
+    <table class="days">
+      <tr><th>Item</th><th>PLN</th></tr>
+      <tr><td>BOM B</td><td>5120</td></tr>
+      <tr><td>2× Jinko Tiger Neo 450 W (wholesale, 0.62 PLN/W) + shipping</td><td>~750</td></tr>
+      <tr><td>2× Victron SmartSolar MPPT 100/30 (one per panel)</td><td>868</td></tr>
+      <tr><td>Mounting, Mean Well 24→12 V, PV wiring, MC4, fuses, marine extras</td><td>~890</td></tr>
+      <tr><td><b>Total</b></td><td><b>≈ 7600–7700</b></td></tr>
+    </table>
+    <p class="note">Scales by repeating the panel+MPPT pair: each further
+    +900 Wp ≈ +1550 PLN. Two small MPPTs beat one big one on a boat:
+    shading immunity and redundancy, same VE.Direct telemetry.</p>
+  </section>
+  <section>
+    <h2>Where cheap is fine — and where it isn't</h2>
+    <div class="grid3">
+      <div class="tile"><b>Cheap is fine</b><br>ESP32 boards (clones work),
+        GNSS modules, relays, enclosures, standard rigid residential solar
+        panels — per watt they beat "marine" panels 6× with the same cells.</div>
+      <div class="tile"><b>Don't cheap out</b><br>The shunt (it is the
+        control input), the fuse/contactor/kill-switch chain, battery BMS
+        quality, cable cross-sections and lugs.</div>
+      <div class="tile"><b>Avoid</b><br>Flexible panels except on curved
+        or walked surfaces (short life, hot spots), no-name LiFePO4
+        without documented BMS limits, un-fused anything.</div>
+    </div>
+  </section>
+  <section>
+    <div class="warnbox"><b>Verify before wiring.</b> Some listed prices
+    and specs could not be confirmed from manufacturer documents and are
+    flagged in the
+    <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/BUYING_GUIDE.md">full guide</a>
+    with purchase links, datasheet links and verification notes per
+    component. Read <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/SAFETY.md">docs/SAFETY.md</a>
+    before connecting anything to a battery.</div>
+  </section>
+</main>
+<footer>SolarHelm — open source (MIT).
+<a href="https://github.com/abecadel/SolarHelm">github.com/abecadel/SolarHelm</a></footer>
+</body>
+</html>
