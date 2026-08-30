@@ -35,6 +35,12 @@ struct TelemetryRecord {
     // for geographic residual learning.
     double latitude_deg = 0.0;
     double longitude_deg = 0.0;
+    // Configuration identity (Helios L1): which boat configuration
+    // produced this record — the learner branches on changes.
+    float config_revision = 1.0f;
+    // Attitude (Helios L8): 0.0 until an IMU is fitted and streaming.
+    float roll_deg = 0.0f;
+    float pitch_deg = 0.0f;
 };
 
 // CSV header matching writeCsvRow's column order.

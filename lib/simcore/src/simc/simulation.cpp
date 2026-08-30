@@ -141,6 +141,15 @@ TickResult Simulation::step() {
         helm_.setArrivalBudget(arrival_stream_w_, now_ms);
     }
 
+    // A gentle attitude swell stands in for the future IMU (Helios L8),
+    // so scenario CSVs carry plausible roll/pitch columns.
+    sh::ImuSample imu;
+    imu.valid = true;
+    imu.timestamp_ms = now_ms;
+    imu.roll_deg = 3.0f * std::sin(t_s_ / 5.0f);
+    imu.pitch_deg = 1.0f * std::sin(t_s_ / 7.0f);
+    helm_.setImuSample(imu);
+
     // --- The real controller decides. ---
     const sh::HelmOutput out = helm_.step(now_ms, dt_s, shunt_.read(),
                                           solar_mon_.read(), gps_.read());

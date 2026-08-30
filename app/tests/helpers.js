@@ -215,12 +215,14 @@ export function windPayload(days = 1) {
 /** A SolarHelm telemetry CSV with steady 90 s cruise blocks at the given
  *  [speedKmh, powerW] settings (1 Hz rows; matches sh::telemetryCsvHeader
  *  column names the learner needs). */
-export function telemetryCsv(settings) {
-  const lines = ['timestamp_ms,speed_kmh,motor_estimated_power_w'];
+export function telemetryCsv(settings, { configRevision } = {}) {
+  const rev = configRevision === undefined ? '' : ',config_revision';
+  const lines = [`timestamp_ms,speed_kmh,motor_estimated_power_w${rev}`];
   let t = 0;
   for (const [v, p] of settings) {
     for (let s = 0; s < 90; s++) {
-      lines.push(`${t * 1000},${v},${p}`);
+      const tail = configRevision === undefined ? '' : `,${configRevision}`;
+      lines.push(`${t * 1000},${v},${p}${tail}`);
       t += 1;
     }
   }

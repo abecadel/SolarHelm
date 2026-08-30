@@ -10,14 +10,14 @@ const char* telemetryCsvHeader() {
            "motor_estimated_power_w,speed_kmh,distance_today_km,"
            "energy_solar_today_wh,energy_motor_today_wh,energy_hotel_today_wh,"
            "efficiency_wh_km,reserve_soc_pct,fault_flags,"
-           "latitude_deg,longitude_deg";
+           "latitude_deg,longitude_deg,config_revision,roll_deg,pitch_deg";
 }
 
 int writeCsvRow(const TelemetryRecord& r, char* buf, size_t buf_len) {
     return snprintf(
         buf, buf_len,
         "%lu,%u,%.2f,%.2f,%.1f,%.2f,%.1f,%.2f,%.1f,%.2f,%.4f,%.1f,%.1f,%.1f,"
-        "%.1f,%.1f,%u,%.6f,%.6f",
+        "%.1f,%.1f,%u,%.6f,%.6f,%.0f,%.1f,%.1f",
         static_cast<unsigned long>(r.timestamp_ms),
         static_cast<unsigned>(r.mode), static_cast<double>(r.battery_voltage_v),
         static_cast<double>(r.battery_current_a),
@@ -34,7 +34,8 @@ int writeCsvRow(const TelemetryRecord& r, char* buf, size_t buf_len) {
         static_cast<double>(r.efficiency_wh_km),
         static_cast<double>(r.reserve_soc_pct),
         static_cast<unsigned>(r.fault_flags), r.latitude_deg,
-        r.longitude_deg);
+        r.longitude_deg, static_cast<double>(r.config_revision),
+        static_cast<double>(r.roll_deg), static_cast<double>(r.pitch_deg));
 }
 
 }  // namespace sh

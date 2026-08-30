@@ -24,7 +24,8 @@ const SAMPLE = {
   energy_solar_today_wh: 1500, energy_motor_today_wh: 1300,
   energy_hotel_today_wh: 240, efficiency_wh_km: 91.3,
   reserve_soc_pct: 25, fault_flags: 0, latitude_deg: 43.5081,
-  longitude_deg: 16.4402,
+  longitude_deg: 16.4402, config_revision: 2, roll_deg: -3.2,
+  pitch_deg: 0.8,
 };
 
 test('decodeFaults names the raised bits', () => {
@@ -39,14 +40,19 @@ test('decodeFaults names the raised bits', () => {
 test('toCsv emits the firmware CSV format, positions included', () => {
   const csv = toCsv([SAMPLE, { ...SAMPLE, timestamp_ms: 124456,
                                latitude_deg: undefined,
-                               longitude_deg: undefined }]);
+                               longitude_deg: undefined,
+                               config_revision: undefined,
+                               roll_deg: undefined,
+                               pitch_deg: undefined }]);
   assert.ok(csv.startsWith(CSV_HEADER));
-  assert.ok(CSV_HEADER.endsWith('latitude_deg,longitude_deg'));
+  assert.ok(CSV_HEADER.endsWith('config_revision,roll_deg,pitch_deg'));
   const rows = parseTelemetryRows(csv);
   assert.equal(rows.length, 2);
   assert.equal(rows[0].powerW, 495);
   assert.equal(rows[0].lat, 43.5081);
+  assert.equal(rows[0].configRevision, 2);
   assert.equal(rows[1].lat, 0); // missing position -> the 0,0 sentinel
+  assert.equal(rows[1].configRevision, 1); // firmware default
 });
 
 function boatDeps(fetchImpl, values = {}) {

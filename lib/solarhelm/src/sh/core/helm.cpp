@@ -176,6 +176,11 @@ HelmOutput Helm::step(uint32_t now_ms, float dt_s,
         t.latitude_deg = gps.latitude_deg;
         t.longitude_deg = gps.longitude_deg;
     }
+    t.config_revision = cfg_.config_revision;
+    if (imu_.valid) {
+        t.roll_deg = imu_.roll_deg;
+        t.pitch_deg = imu_.pitch_deg;
+    }
     return out;
 }
 

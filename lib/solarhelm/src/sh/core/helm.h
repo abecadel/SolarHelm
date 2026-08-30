@@ -71,6 +71,12 @@ public:
     // reserve-SOC floor still applies.
     void setArrivalBudget(float battery_power_w, uint32_t now_ms);
 
+    // Attitude feed (Helios L8): advisory only — stamped into telemetry
+    // for wave-state/stability learning, never in the safety path. Call
+    // whenever the IMU produces a sample; absent an IMU, telemetry
+    // carries 0.0.
+    void setImuSample(const ImuSample& imu) { imu_ = imu; }
+
     // One control tick: dt_s since the previous step; samples may be stale
     // or invalid — Helm decides what is trustworthy.
     HelmOutput step(uint32_t now_ms, float dt_s, const BatterySample& battery,
@@ -99,6 +105,8 @@ private:
     float arrival_budget_w_ = 0.0f;
     uint32_t arrival_budget_ms_ = 0;
     bool arrival_budget_seen_ = false;
+    // Latest attitude sample (telemetry only).
+    ImuSample imu_;
 };
 
 }  // namespace sh

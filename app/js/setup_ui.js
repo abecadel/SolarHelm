@@ -44,6 +44,17 @@ export function fillSetupForm(doc, profile) {
       String(profile.motor_max_power_w);
   doc.getElementById('setup-curve').value =
       curveToText(profile.hull_efficiency_curve_kmh_whkm);
+  doc.getElementById('setup-hull-count').value =
+      String(profile.hull_count ?? 1);
+  doc.getElementById('setup-lwl').value = String(profile.lwl_m ?? 0);
+  doc.getElementById('setup-beam-wl').value =
+      String(profile.beam_waterline_m ?? 0);
+  doc.getElementById('setup-spacing').value =
+      String(profile.hull_spacing_m ?? 0);
+  doc.getElementById('setup-displacement').value =
+      String(profile.displacement_kg ?? 0);
+  doc.getElementById('setup-cda').value =
+      String(profile.cda_front_m2 ?? 1.2);
   doc.getElementById('setup-revision').textContent =
       `configuration revision ${profile.config_revision ?? 1}` +
       (profile.config_change_note ? ` — ${profile.config_change_note}` : '');
@@ -71,6 +82,12 @@ export function saveSetup(deps, state) {
     hotel_load_w: num(doc, 'setup-hotel'),
     motor_max_power_w: num(doc, 'setup-motor'),
     hull_efficiency_curve_kmh_whkm: curve,
+    hull_count: Math.round(num(doc, 'setup-hull-count')),
+    lwl_m: num(doc, 'setup-lwl'),
+    beam_waterline_m: num(doc, 'setup-beam-wl'),
+    hull_spacing_m: num(doc, 'setup-spacing'),
+    displacement_kg: num(doc, 'setup-displacement'),
+    cda_front_m2: num(doc, 'setup-cda'),
     config_revision: (state.profile.config_revision ?? 1) + 1,
     config_change_note:
         doc.getElementById('setup-note').value || 'edited in the app',

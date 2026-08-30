@@ -38,6 +38,15 @@ struct BoatProfile {
     float hotel_load_w = 0.0f;
     float motor_max_power_w = 0.0f;
 
+    // Hull geometry (Helios lessons L2/L9): OPTIONAL in the JSON — absent
+    // fields keep these defaults, so old profiles stay valid. 0 = unknown.
+    int hull_count = 1;             // 1 mono, 2 cat, 3 tri
+    float lwl_m = 0.0f;             // per-hull waterline length
+    float beam_waterline_m = 0.0f;  // per-hull waterline beam
+    float hull_spacing_m = 0.0f;    // multihull centreline spacing
+    float displacement_kg = 0.0f;   // all-up displacement
+    float cda_front_m2 = 1.2f;      // frontal-area aero prior
+
     bool valid() const;
 
     // Electrical power (W) needed to hold `speed_kmh`, from the hull curve.

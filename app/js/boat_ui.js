@@ -38,7 +38,7 @@ export const CSV_HEADER =
     'motor_estimated_power_w,speed_kmh,distance_today_km,' +
     'energy_solar_today_wh,energy_motor_today_wh,energy_hotel_today_wh,' +
     'efficiency_wh_km,reserve_soc_pct,fault_flags,latitude_deg,' +
-    'longitude_deg';
+    'longitude_deg,config_revision,roll_deg,pitch_deg';
 
 export function toCsv(samples) {
   const rows = samples.map((t) => [
@@ -48,6 +48,7 @@ export function toCsv(samples) {
     t.distance_today_km, t.energy_solar_today_wh, t.energy_motor_today_wh,
     t.energy_hotel_today_wh, t.efficiency_wh_km, t.reserve_soc_pct,
     t.fault_flags, t.latitude_deg ?? 0, t.longitude_deg ?? 0,
+    t.config_revision ?? 1, t.roll_deg ?? 0, t.pitch_deg ?? 0,
   ].join(','));
   return [CSV_HEADER, ...rows].join('\n');
 }
@@ -72,6 +73,9 @@ export function renderTelemetry(doc, t) {
         <span>${t.distance_today_km.toFixed(1)} km today</span></div>
       <div class="card"><b>${t.efficiency_wh_km.toFixed(0)} Wh/km</b>
         <span>efficiency</span></div>
+      <div class="card"><b>${(t.roll_deg ?? 0).toFixed(1)}° /
+        ${(t.pitch_deg ?? 0).toFixed(1)}°</b>
+        <span>roll / pitch (rev ${t.config_revision ?? 1})</span></div>
     </div>
     ${faults.length
       ? `<div class="verdict warn">faults: ${faults.join(', ')}</div>`

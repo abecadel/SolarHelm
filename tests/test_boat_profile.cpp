@@ -46,6 +46,58 @@ TEST(profile_repo_json_parses_and_matches_default) {
     CHECK_NEAR(p.battery_max_discharge_w, d.battery_max_discharge_w, 1e-2);
     CHECK_NEAR(p.hotel_load_w, d.hotel_load_w, 1e-4);
     CHECK_NEAR(p.motor_max_power_w, d.motor_max_power_w, 1e-2);
+    CHECK(p.hull_count == d.hull_count);
+    CHECK_NEAR(p.lwl_m, d.lwl_m, 1e-4);
+    CHECK_NEAR(p.beam_waterline_m, d.beam_waterline_m, 1e-4);
+    CHECK_NEAR(p.hull_spacing_m, d.hull_spacing_m, 1e-4);
+    CHECK_NEAR(p.displacement_kg, d.displacement_kg, 1e-2);
+    CHECK_NEAR(p.cda_front_m2, d.cda_front_m2, 1e-4);
+}
+
+TEST(profile_repo_powercat_json_is_a_valid_catamaran) {
+    const std::string json = readFile("config/powercat_profile.json");
+    CHECK(!json.empty());
+    BoatProfile p;
+    std::string err;
+    CHECK(parseBoatProfile(json, &p, &err));
+    CHECK(p.hull_count == 2);
+    CHECK_NEAR(p.lwl_m, 8.0f, 1e-4);
+    CHECK_NEAR(p.beam_waterline_m, 0.5f, 1e-4);
+    CHECK_NEAR(p.hull_spacing_m, 2.5f, 1e-4);
+    CHECK_NEAR(p.displacement_kg, 1000.0f, 1e-2);
+    CHECK_NEAR(p.motor_max_power_w, 4000.0f, 1e-2);
+    // The reference cat cruises far cheaper than the reference launch.
+    CHECK(p.powerForSpeedW(6.0f) < 350.0f);
+}
+
+TEST(profile_hull_geometry_is_optional_with_safe_defaults) {
+    // A pre-L2 profile without any geometry keys parses and keeps the
+    // monohull defaults.
+    const std::string old_json =
+        "{\"schema_version\":1,\"pv_kwp\":1,\"pv_derating\":0.8,"
+        "\"battery_capacity_kwh\":2.5,\"battery_usable_min_soc_pct\":10,"
+        "\"battery_max_charge_w\":1000,\"battery_max_discharge_w\":2000,"
+        "\"hotel_load_w\":50,\"motor_max_power_w\":1000,"
+        "\"hull_efficiency_curve_kmh_whkm\":[[3.0,85.0],[5.0,120.0]]}";
+    BoatProfile p;
+    std::string err;
+    CHECK(parseBoatProfile(old_json, &p, &err));
+    CHECK(p.hull_count == 1);
+    CHECK_NEAR(p.lwl_m, 0.0f, 1e-6);
+    CHECK_NEAR(p.cda_front_m2, 1.2f, 1e-6);
+    // Present-but-insane geometry is rejected by valid().
+    BoatProfile bad = defaultBoatProfile();
+    bad.hull_count = 4;
+    CHECK(!bad.valid());
+    bad = defaultBoatProfile();
+    bad.hull_count = 0;
+    CHECK(!bad.valid());
+    bad = defaultBoatProfile();
+    bad.cda_front_m2 = 0.0f;
+    CHECK(!bad.valid());
+    bad = defaultBoatProfile();
+    bad.displacement_kg = -1.0f;
+    CHECK(!bad.valid());
 }
 
 TEST(profile_parse_errors) {

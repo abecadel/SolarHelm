@@ -28,6 +28,7 @@ enum class ConfigError : uint8_t {
     kBadMotorPower,
     kBadBatteryGuard,
     kBadRangePower,
+    kBadConfigRevision,
 };
 
 const char* configErrorName(ConfigError e);
@@ -96,6 +97,10 @@ struct ControlConfig {
 
     // --- Telemetry / estimation ---
     float motor_max_power_w = 1164.0f;  // full-throttle electrical power
+    // Configuration revision (Helios L1): the app pushes the profile's
+    // monotonic revision here so every telemetry record says which boat
+    // configuration produced it; the learner branches on changes.
+    float config_revision = 1.0f;
 
     // Returns kNone when the configuration is usable.
     ConfigError validate() const;

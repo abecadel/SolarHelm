@@ -557,6 +557,32 @@ TEST(helm_arrival_tracks_budget_and_degrades_when_stale) {
     CHECK((out.telemetry.fault_flags & sh::kFaultArrivalStale) != 0);
 }
 
+TEST(helm_stamps_config_revision_and_imu_into_telemetry) {
+    ControlConfig cfg;
+    cfg.config_revision = 7.0f;
+    Helm helm(cfg, nullptr);
+    uint32_t t = 1000;
+    // No IMU yet: attitude stays 0.0, revision is stamped regardless.
+    sh::HelmOutput out =
+        helm.step(t, 0.5f, battSample(t, 100.0f, 80.0f),
+                  solarSample(t, 500.0f), gpsSample(t, 1.0f));
+    CHECK_NEAR(out.telemetry.config_revision, 7.0f, 1e-6);
+    CHECK_NEAR(out.telemetry.roll_deg, 0.0f, 1e-6);
+    CHECK_NEAR(out.telemetry.pitch_deg, 0.0f, 1e-6);
+    // IMU streaming: the latest attitude rides along.
+    sh::ImuSample imu;
+    imu.valid = true;
+    imu.timestamp_ms = t;
+    imu.roll_deg = -4.5f;
+    imu.pitch_deg = 1.5f;
+    helm.setImuSample(imu);
+    t += 500;
+    out = helm.step(t, 0.5f, battSample(t, 100.0f, 80.0f),
+                    solarSample(t, 500.0f), gpsSample(t, 1.0f));
+    CHECK_NEAR(out.telemetry.roll_deg, -4.5f, 1e-6);
+    CHECK_NEAR(out.telemetry.pitch_deg, 1.5f, 1e-6);
+}
+
 TEST(helm_force_manual_from_auto) {
     ControlConfig cfg;
     Helm helm(cfg, nullptr);

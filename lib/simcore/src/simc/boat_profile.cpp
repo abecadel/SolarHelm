@@ -96,7 +96,10 @@ bool BoatProfile::valid() const {
            battery_max_discharge_w > 0.0f && hotel_load_w >= 0.0f &&
            motor_max_power_w > 0.0f &&
            battery_usable_min_soc_pct >= 0.0f &&
-           battery_usable_min_soc_pct < 100.0f;
+           battery_usable_min_soc_pct < 100.0f && hull_count >= 1 &&
+           hull_count <= 3 && lwl_m >= 0.0f && beam_waterline_m >= 0.0f &&
+           hull_spacing_m >= 0.0f && displacement_kg >= 0.0f &&
+           cda_front_m2 > 0.0f;
 }
 
 float BoatProfile::powerForSpeedW(float speed_kmh) const {
@@ -183,6 +186,22 @@ bool parseBoatProfile(const std::string& json, BoatProfile* out,
             return false;
         }
     }
+    // Hull-geometry fields are OPTIONAL (older profiles predate them);
+    // absent keys keep the struct defaults.
+    const Field optional[] = {
+        {"lwl_m", &p.lwl_m},
+        {"beam_waterline_m", &p.beam_waterline_m},
+        {"hull_spacing_m", &p.hull_spacing_m},
+        {"displacement_kg", &p.displacement_kg},
+        {"cda_front_m2", &p.cda_front_m2},
+    };
+    for (const Field& f : optional) {
+        findNumber(json, f.key, f.dst);
+    }
+    float hulls = 0.0f;
+    if (findNumber(json, "hull_count", &hulls)) {
+        p.hull_count = static_cast<int>(hulls);
+    }
     if (!findCurve(json, "hull_efficiency_curve_kmh_whkm", &p.hull_curve)) {
         *error = "missing or malformed hull_efficiency_curve_kmh_whkm";
         return false;
@@ -208,6 +227,12 @@ BoatProfile defaultBoatProfile() {
     p.battery_max_discharge_w = 2500.0f;
     p.hotel_load_w = 60.0f;
     p.motor_max_power_w = 1164.0f;
+    p.hull_count = 1;
+    p.lwl_m = 4.5f;
+    p.beam_waterline_m = 1.6f;
+    p.hull_spacing_m = 0.0f;
+    p.displacement_kg = 400.0f;
+    p.cda_front_m2 = 1.2f;
     return p;
 }
 

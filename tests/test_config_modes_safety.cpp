@@ -103,6 +103,8 @@ TEST(config_rejects_every_bad_field) {
              c.range_motor_power_w = c.motor_max_power_w + 1.0f;
          },
          ConfigError::kBadRangePower},
+        {[](ControlConfig& c) { c.config_revision = 0.0f; },
+         ConfigError::kBadConfigRevision},
     };
     for (const Case& c : cases) {
         ControlConfig cfg;
@@ -119,7 +121,7 @@ TEST(config_error_names_are_distinct) {
         ConfigError::kBadCommandLimits, ConfigError::kBadReserveSoc,
         ConfigError::kBadSolarPlusTarget, ConfigError::kBadTimeouts,
         ConfigError::kBadMotorPower, ConfigError::kBadBatteryGuard,
-        ConfigError::kBadRangePower,
+        ConfigError::kBadRangePower, ConfigError::kBadConfigRevision,
     };
     std::vector<std::string> names;
     for (ConfigError e : all) {

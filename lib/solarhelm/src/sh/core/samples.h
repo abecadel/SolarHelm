@@ -43,4 +43,14 @@ struct GpsSample {
     uint8_t satellites = 0;
 };
 
+// One attitude reading (IMU, Helios L8): wave-state features and
+// stability evidence from the same sensor. Advisory only — never in the
+// safety path.
+struct ImuSample {
+    bool valid = false;
+    uint32_t timestamp_ms = 0;
+    float roll_deg = 0.0f;   // + starboard down
+    float pitch_deg = 0.0f;  // + bow up
+};
+
 }  // namespace sh

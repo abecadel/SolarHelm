@@ -91,6 +91,17 @@ test('applyModelLearning learns, persists, refreshes and reports drift',
       [[4, 84], [4, 84], [5, 150], [6, 246], [7, 378]]));
   assert.ok(deps.doc.getElementById('model-learn-status').textContent
       .includes('runs easier'));
+
+  // A revision-stamped log from a refit: the learner branches and the
+  // status says so (Helios L1).
+  state.vessel = { curve: { b1: 10, b3: 2 }, relErrors: [0.1, 0.1],
+                   voyages: 3, configRevision: 2 };
+  applyModelLearning(deps, state, telemetryCsv(
+      [[4, 168], [4, 168], [5, 300], [6, 492], [7, 756]],
+      { configRevision: 5 }));
+  assert.ok(deps.doc.getElementById('model-learn-status').textContent
+      .includes('New configuration revision 5'));
+  assert.equal(state.vessel.configRevision, 5);
 });
 
 test('applyModelLearning feeds positioned residuals into the geo store',
@@ -166,23 +177,25 @@ test('saveSetup validates, bumps the revision and persists', () => {
   const state = { profile: { ...PROFILE } };
   fillSetupForm(deps.doc, state.profile);
   assert.ok(deps.doc.getElementById('setup-revision').textContent
-      .includes('revision 1'));
+      .includes('revision 2'));
 
   deps.doc.getElementById('setup-pv').value = '2.0';
   deps.doc.getElementById('setup-note').value = 'second panel pair';
   assert.equal(saveSetup(deps, state), true);
   assert.equal(state.profile.pv_kwp, 2);
-  assert.equal(state.profile.config_revision, 2);
+  assert.equal(state.profile.config_revision, 3);
   assert.equal(state.profile.config_change_note, 'second panel pair');
+  assert.equal(state.profile.hull_count, 1); // geometry rides along
+  assert.equal(state.profile.lwl_m, 4.5);
   const stored = JSON.parse(deps.storage.getItem(PROFILE_STORAGE_KEY));
-  assert.equal(stored.config_revision, 2);
+  assert.equal(stored.config_revision, 3);
   assert.ok(deps.doc.getElementById('setup-status').textContent
-      .includes('revision 2'));
+      .includes('revision 3'));
 
   // Bad curve refused, profile untouched.
   deps.doc.getElementById('setup-curve').value = 'nope';
   assert.equal(saveSetup(deps, state), false);
-  assert.equal(state.profile.config_revision, 2);
+  assert.equal(state.profile.config_revision, 3);
   // Invalid numbers refused by profileValid.
   fillSetupForm(deps.doc, state.profile);
   deps.doc.getElementById('setup-pv').value = '0';

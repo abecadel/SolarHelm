@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "config_revision": 1,
+  "config_change_note": "SolarHelm Light powercat reference (L9)",
+  "name": "SolarHelm Light powercat (48 V reference design)",
+  "hull_efficiency_curve_kmh_whkm": [
+    [4.0, 34.0],
+    [5.0, 38.0],
+    [6.0, 48.0],
+    [7.0, 60.0],
+    [8.0, 78.0]
+  ],
+  "pv_kwp": 3.0,
+  "pv_derating": 0.78,
+  "battery_capacity_kwh": 10.0,
+  "battery_usable_min_soc_pct": 10.0,
+  "battery_max_charge_w": 4000.0,
+  "battery_max_discharge_w": 8000.0,
+  "hotel_load_w": 150.0,
+  "motor_max_power_w": 4000.0,
+  "hull_count": 2,
+  "lwl_m": 8.0,
+  "beam_waterline_m": 0.5,
+  "hull_spacing_m": 2.5,
+  "displacement_kg": 1000.0,
+  "bow_type": "conventional",
+  "cda_front_m2": 1.6
+}

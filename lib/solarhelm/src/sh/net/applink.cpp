@@ -18,7 +18,8 @@ int writeTelemetryJson(const TelemetryRecord& r, char* buf, size_t buf_len) {
         "\"distance_today_km\":%.3f,\"energy_solar_today_wh\":%.1f,"
         "\"energy_motor_today_wh\":%.1f,\"energy_hotel_today_wh\":%.1f,"
         "\"efficiency_wh_km\":%.1f,\"reserve_soc_pct\":%.1f,"
-        "\"fault_flags\":%u,\"latitude_deg\":%.6f,\"longitude_deg\":%.6f}",
+        "\"fault_flags\":%u,\"latitude_deg\":%.6f,\"longitude_deg\":%.6f,"
+        "\"config_revision\":%.0f,\"roll_deg\":%.1f,\"pitch_deg\":%.1f}",
         static_cast<unsigned long>(r.timestamp_ms),
         static_cast<unsigned>(r.mode),
         static_cast<double>(r.battery_voltage_v),
@@ -36,7 +37,8 @@ int writeTelemetryJson(const TelemetryRecord& r, char* buf, size_t buf_len) {
         static_cast<double>(r.efficiency_wh_km),
         static_cast<double>(r.reserve_soc_pct),
         static_cast<unsigned>(r.fault_flags), r.latitude_deg,
-        r.longitude_deg);
+        r.longitude_deg, static_cast<double>(r.config_revision),
+        static_cast<double>(r.roll_deg), static_cast<double>(r.pitch_deg));
 }
 
 static int findNumberField(const char* body, size_t len, const char* name,
@@ -109,6 +111,7 @@ const ConfigField kConfigFields[] = {
     {"motor_max_power_w", &ControlConfig::motor_max_power_w},
     // APPEND ONLY: NVS persists these by index (f0..fN, firmware/main.cpp).
     {"range_motor_power_w", &ControlConfig::range_motor_power_w},
+    {"config_revision", &ControlConfig::config_revision},
 };
 const size_t kConfigFieldCount =
     sizeof(kConfigFields) / sizeof(kConfigFields[0]);

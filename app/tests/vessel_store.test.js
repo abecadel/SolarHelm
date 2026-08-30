@@ -93,6 +93,32 @@ test('learnFromTelemetry refits the curve and calibrates from residuals',
   assert.equal(vessel.relErrors.length, 0);
 });
 
+test('learnFromTelemetry branches on a new config_revision (L1)', () => {
+  // The vessel carries residual history from revision 2...
+  const vessel = { ...vesselFromProfile(PROFILE),
+                   configRevision: 2,
+                   relErrors: [0.1, 0.12, 0.09, 0.11] };
+  // ...and the new log is stamped revision 3 (a refit happened).
+  const refitLog = telemetryCsv(
+      [[4, 168], [4, 168], [5, 300], [6, 492], [7, 756]],
+      { configRevision: 3 });
+  const out = learnFromTelemetry(vessel, refitLog);
+  assert.equal(out.ok, true);
+  assert.equal(out.report.revisionBranched, true);
+  assert.equal(out.vessel.configRevision, 3);
+  // Old residuals dropped: only this log's blocks remain.
+  assert.equal(out.vessel.relErrors.length, out.report.blocks);
+  // Same revision: history accumulates, no branch.
+  const sameRev = learnFromTelemetry(out.vessel, refitLog);
+  assert.equal(sameRev.report.revisionBranched, false);
+  assert.ok(sameRev.vessel.relErrors.length > out.vessel.relErrors.length);
+  // Unstamped legacy logs never branch.
+  const legacy = learnFromTelemetry(vessel, telemetryCsv(
+      [[4, 168], [4, 168], [5, 300], [6, 492], [7, 756]]));
+  assert.equal(legacy.report.revisionBranched, false);
+  assert.equal(legacy.vessel.configRevision, 2);
+});
+
 test('learnFromTelemetry flags sustained more-power drift', () => {
   const vessel = { ...vesselFromProfile(PROFILE),
                    curve: { b1: 10, b3: 2 } };

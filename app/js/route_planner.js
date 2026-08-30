@@ -101,7 +101,8 @@ export function waveExtraW(stwKmh, waveHsM, waveDirDeg, bearing,
 export function solveStwKmh(vessel, powerW, env, bearing) {
   let stw = hullSpeedKmh(vessel.curve, powerW);
   for (let i = 0; i < 6; i++) {
-    const extras = aeroExtraW(stw, env.windMs, env.windDirDeg, bearing) +
+    const extras = aeroExtraW(stw, env.windMs, env.windDirDeg, bearing,
+                              vessel.cdaFrontM2 ?? 1.2) +
                    waveExtraW(stw, env.waveHsM, env.waveDirDeg, bearing);
     const hullShare = powerW - extras;
     stw = hullShare > 0 ? hullSpeedKmh(vessel.curve, hullShare) : 0;

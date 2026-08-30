@@ -30,6 +30,7 @@ export function parseTelemetryRows(csvText) {
   const iMotor = header.indexOf('motor_estimated_power_w');
   const iLat = header.indexOf('latitude_deg');
   const iLon = header.indexOf('longitude_deg');
+  const iRev = header.indexOf('config_revision');
   if (iT < 0 || iSpeed < 0 || iMotor < 0) return null;
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
@@ -47,6 +48,10 @@ export function parseTelemetryRows(csvText) {
         row.lat = lat;
         row.lon = lon;
       }
+    }
+    if (iRev >= 0) {
+      const rev = parseFloat(c[iRev]);
+      if (Number.isFinite(rev)) row.configRevision = rev;
     }
     rows.push(row);
   }
@@ -73,9 +78,23 @@ export function learnFromTelemetry(vessel, csvText, opts = {}) {
              reason: `only ${blocks.length} steady block(s) in the log ` +
                      '(need 3) - hold power steady for longer stretches' };
   }
+  // Configuration branching (Helios L1): a log stamped with a different
+  // config_revision describes a DIFFERENT boat (refit, new panels, added
+  // mass) — drop the residual history instead of blending two boats into
+  // one wrong model, and adopt the log's revision.
+  let base = vessel;
+  let revisionBranched = false;
+  const stamped = rows.filter((r) => Number.isFinite(r.configRevision));
+  if (stamped.length > 0) {
+    const logRevision = stamped[stamped.length - 1].configRevision;
+    if ((vessel.configRevision ?? 1) !== logRevision) {
+      base = { ...vessel, relErrors: [], configRevision: logRevision };
+      revisionBranched = true;
+    }
+  }
   // Residuals against the model as it was BEFORE this log (honest
   // prediction-vs-actual), then refit including the new evidence.
-  const relErrors = vessel.relErrors.slice();
+  const relErrors = base.relErrors.slice();
   const cusum = new CusumDrift();
   const positioned = []; // residuals with a fix: geographic learning food
   let drift = 0;
@@ -96,11 +115,11 @@ export function learnFromTelemetry(vessel, csvText, opts = {}) {
                                        weight: b.n }));
   const curve = fitHullCurveNNLS(samples);
   const quantiles = errorQuantiles(relErrors);
-  const next = { ...vessel, curve, relErrors,
-                 voyages: vessel.voyages + 1 };
+  const next = { ...base, curve, relErrors,
+                 voyages: base.voyages + 1 };
   return { ok: true, vessel: next,
            report: { blocks: blocks.length, drift, quantiles, curve,
-                     positioned } };
+                     positioned, revisionBranched } };
 }
 
 export function saveVessel(storage, vessel) {

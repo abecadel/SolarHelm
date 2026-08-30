@@ -236,6 +236,9 @@ export function vesselFromProfile(profile) {
     pvKwp: profile.pv_kwp,
     pvDerating: profile.pv_derating,
     batteryKwh: profile.battery_capacity_kwh,
+    // Aero prior and configuration identity (Helios L1/L3).
+    cdaFrontM2: profile.cda_front_m2 ?? 1.2,
+    configRevision: profile.config_revision ?? 1,
     relErrors: [],
     voyages: 0,
   };

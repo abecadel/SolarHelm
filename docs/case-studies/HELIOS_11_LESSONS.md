@@ -24,6 +24,9 @@ different boats into one wrong model.
 note) to `config/boat_profile.json` and to the telemetry record;
 `vessel_store.js` must reset/branch CUSUM and quantiles on revision
 change (drift after a battery+200 kg refit is a new boat, not fouling).
+**Status.** ✅ SHIPPED: the boat stamps `config_revision` into every
+telemetry record (ControlConfig -> CSV/JSON), and `vessel_store.js`
+drops the residual history when a log carries a new revision.
 
 ## L2 — Efficiency comes from the hull, not the battery
 
@@ -43,6 +46,8 @@ donor-boat strategy must weigh hull quality above battery size.
 derive slenderness and Froude number in the model layer
 (docs/reference-vessels/SOLARHELM_LIGHT_POWERCAT.md carries the
 schema).
+**Status.** ✅ SHIPPED: optional profile fields on both sides of the
+schema; slenderness/Froude derive in `app/js/hull_physics.js`.
 
 ## L3 — Strong wind alone is survivable; the aero model validates
 
@@ -164,6 +169,10 @@ should meter rather than fight.
 reuses planner physics — not implemented yet, by decision). Telemetry:
 log roll/pitch once the IMU lands (Wave 1 bench list already includes
 one) — wave-state features AND stability evidence from the same sensor.
+**Status.** ✅ roll/pitch plumbed end-to-end (ImuSample → telemetry →
+CSV/JSON → app; sensor itself is Wave-1 bench work). The Vessel
+Designer is implemented as the app's Design tab (user decision reversed
+the deferral) — multi-objective, constraints included per this lesson.
 
 ## L9 — Multihulls are the structural answer to L2+L8 together
 
@@ -182,6 +191,9 @@ control-loop change. The DIY powercat replaces "buy any donor" as the
 platform target (docs/reference-vessels/SOLARHELM_LIGHT_POWERCAT.md).
 **Change.** Profile schema fields per L2; simulator gains a cat
 reference profile; hull model treats per-hull displacement.
+**Status.** ✅ SHIPPED: `config/powercat_profile.json` is the cat
+reference (runs via `sim --profile`); per-hull displacement lives in
+the parametric hull law (`app/js/hull_physics.js`).
 
 ## L10 — Fouling and degradation are detectable drift
 

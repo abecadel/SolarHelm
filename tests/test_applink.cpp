@@ -30,7 +30,7 @@ TEST(telemetry_json_carries_every_field) {
     r.reserve_soc_pct = 25.0f;
     r.fault_flags = 0x1042;
 
-    char buf[512];
+    char buf[768];
     const int n = sh::writeTelemetryJson(r, buf, sizeof(buf));
     CHECK(n > 0);
     CHECK(static_cast<size_t>(n) < sizeof(buf));
@@ -46,12 +46,20 @@ TEST(telemetry_json_carries_every_field) {
     CHECK(json.find("\"distance_today_km\":12.345") != std::string::npos);
     CHECK(json.find("\"fault_flags\":4162") != std::string::npos);
     CHECK(json.find("\"latitude_deg\":0.000000") != std::string::npos);
+    CHECK(json.find("\"config_revision\":1") != std::string::npos);
+    CHECK(json.find("\"roll_deg\":0.0") != std::string::npos);
     r.latitude_deg = 43.5081;
     r.longitude_deg = 16.4402;
+    r.config_revision = 7.0f;
+    r.roll_deg = -4.5f;
+    r.pitch_deg = 1.2f;
     sh::writeTelemetryJson(r, buf, sizeof(buf));
     const std::string json2(buf);
     CHECK(json2.find("\"latitude_deg\":43.508100") != std::string::npos);
     CHECK(json2.find("\"longitude_deg\":16.440200") != std::string::npos);
+    CHECK(json2.find("\"config_revision\":7") != std::string::npos);
+    CHECK(json2.find("\"roll_deg\":-4.5") != std::string::npos);
+    CHECK(json2.find("\"pitch_deg\":1.2") != std::string::npos);
 }
 
 TEST(telemetry_json_reports_truncation) {
@@ -85,6 +93,9 @@ TEST(telemetry_json_worst_case_fits_the_firmware_buffer) {
     r.fault_flags = 0xFFFF;
     r.latitude_deg = -89.999999;
     r.longitude_deg = -179.999999;
+    r.config_revision = 16777215.0f;  // 2^24: float's exact-integer limit
+    r.roll_deg = -179.9f;
+    r.pitch_deg = -89.9f;
     char buf[768];
     const int n = sh::writeTelemetryJson(r, buf, sizeof(buf));
     CHECK(n > 0);

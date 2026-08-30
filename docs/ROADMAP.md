@@ -72,12 +72,16 @@ curve via the Setup tab's "Set RANGE power from learned model".
 - remote telemetry, mobile dashboard refinements
 - Phase-2 hardware: the SolarHelm interface PCB (see hardware/README.md)
 - **Helios-driven items** (docs/case-studies/HELIOS_11_LESSONS.md):
-  hull-count-aware vessel profile (mono/cat/tri + LWL/beam/spacing/bow
-  fields, L2/L9); `config_revision` stamped into telemetry with
-  learning-state branching (L1); ~~EnergyKnee + SolarEquilibriumSpeed in
+  ~~hull-count-aware vessel profile (mono/cat/tri + LWL/beam/spacing/bow
+  fields, L2/L9)~~ ✅ optional profile schema fields + the
+  `config/powercat_profile.json` cat reference; ~~`config_revision`
+  stamped into telemetry with learning-state branching (L1)~~ ✅ the
+  boat stamps every record, the learner resets residual history on a
+  revision change; ~~EnergyKnee + SolarEquilibriumSpeed in
   the PWA UI (L5/L6); per-day energy ledger in the voyage summary
   (L7); min-steerage-speed safety gate (L12)~~ ✅ shipped in the app;
-  IMU roll/pitch telemetry (L8)
+  ~~IMU roll/pitch telemetry (L8)~~ ✅ plumbed end-to-end (struct → CSV
+  → JSON → app; the physical IMU itself is Wave-1 bench work)
 - **SolarHelm Vessel Designer** (concept only, deliberately not
   started): offline multi-objective search over {length, slenderness,
   displacement, PV, battery, motor, speed} maximizing daily autonomous

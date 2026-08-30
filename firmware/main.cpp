@@ -90,6 +90,8 @@ SerialTransitionLogger g_logger;
 sh::Helm g_helm(g_config, &g_logger);
 vedirect::SmartShuntMonitor g_shunt;
 nmea::GpsMonitor g_gps;
+// TODO(bench Wave 1): when the IMU lands, feed g_helm.setImuSample()
+// from its driver here — telemetry already carries roll_deg/pitch_deg.
 WireBus g_bus;
 gp8403::AnalogThrottle g_throttle(g_bus);
 WebServer g_server(80);

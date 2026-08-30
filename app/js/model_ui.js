@@ -108,6 +108,10 @@ export function applyModelLearning(deps, state, csvText) {
     saveGeoStore(deps.storage, geo);
   }
   doc.getElementById('model-learn-status').textContent =
+      (out.report.revisionBranched
+        ? `New configuration revision ${out.vessel.configRevision} in ` +
+          'this log — residual history reset (a refit is a new boat). '
+        : '') +
       `Learned from ${out.report.blocks} steady blocks — voyage ` +
       `#${out.vessel.voyages}` +
       (out.report.positioned.length > 0

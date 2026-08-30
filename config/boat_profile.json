@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "config_revision": 1,
-  "config_change_note": "initial reference configuration",
+  "config_revision": 2,
+  "config_change_note": "hull geometry fields added (Helios L2/L9)",
   "name": "SolarHelm reference launch (24 V prototype)",
   "hull_efficiency_curve_kmh_whkm": [
     [3.0, 85.0],
@@ -18,5 +18,12 @@
   "battery_max_charge_w": 1200.0,
   "battery_max_discharge_w": 2500.0,
   "hotel_load_w": 60.0,
-  "motor_max_power_w": 1164.0
+  "motor_max_power_w": 1164.0,
+  "hull_count": 1,
+  "lwl_m": 4.5,
+  "beam_waterline_m": 1.6,
+  "hull_spacing_m": 0.0,
+  "displacement_kg": 400.0,
+  "bow_type": "conventional",
+  "cda_front_m2": 1.2
 }
