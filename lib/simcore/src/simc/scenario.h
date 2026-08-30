@@ -27,6 +27,10 @@ enum class EventType : uint8_t {
     kRequestManual,
     kRequestSolar,
     kRequestSolarPlus,
+    kRequestRange,
+    kRequestArrival,
+    kSetArrivalBudget,   // value = battery W; starts the phone budget stream
+    kStopArrivalStream,  // phone goes quiet -> staleness degradation
 };
 
 struct Event {

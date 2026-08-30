@@ -188,6 +188,24 @@
   <p id="boat-status" class="statusline"></p>
   <section id="boat-cards"></section>
   <fieldset>
+    <legend>Cruise mode</legend>
+    <div class="grid">
+      <div><label for="boat-mode">Mode</label>
+        <select id="boat-mode">
+          <option value="solar">SOLAR — hold 0 W battery</option>
+          <option value="solar+">SOLAR+ — allow configured discharge</option>
+          <option value="range">RANGE — hold best-efficiency power</option>
+          <option value="arrival">ARRIVAL — track a battery budget</option>
+          <option value="manual">MANUAL — hand back the throttle</option>
+        </select></div>
+      <div><label for="boat-budget">Arrival budget [W]
+        (− = discharge)</label>
+        <input id="boat-budget" type="number" step="10" value="-150"></div>
+      <div><label>&nbsp;</label><button id="boat-mode-set">Set mode</button></div>
+    </div>
+    <p id="boat-mode-status" class="hint"></p>
+  </fieldset>
+  <fieldset>
     <legend>REMOTE mode target</legend>
     <div class="grid">
       <div><label for="boat-target">Motor power [W]</label>
@@ -257,7 +275,11 @@
       parameters (gains, deadband, ramps, reserve — never the protection
       envelope). The boat validates and stores them in NVS.</label>
     <textarea id="setup-boat-config" rows="6"></textarea>
-    <button id="setup-boat-push">Push to boat</button>
+    <div class="grid">
+      <div><button id="setup-boat-push">Push to boat</button></div>
+      <div><button id="setup-range-fit">Set RANGE power from learned
+        model</button></div>
+    </div>
     <p id="setup-boat-status" class="statusline"></p>
   </fieldset>
 </section>

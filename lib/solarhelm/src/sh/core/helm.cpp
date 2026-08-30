@@ -23,6 +23,11 @@ bool Helm::requestMode(Mode mode, uint32_t now_ms) {
          (now_ms - remote_target_ms_) > cfg_.remote_timeout_ms)) {
         return false;  // no fresh phone target: nothing to execute
     }
+    if (mode == Mode::kArrival &&
+        (!arrival_budget_seen_ ||
+         (now_ms - arrival_budget_ms_) > cfg_.remote_timeout_ms)) {
+        return false;  // no fresh budget stream: nothing to track
+    }
     const bool healthy = last_verdict_.allow_auto;
     const bool was_auto = modes_.isAutomatic();
     const bool granted = modes_.requestMode(mode, healthy, now_ms);
@@ -48,6 +53,17 @@ void Helm::setRemoteTarget(float motor_power_w, uint32_t now_ms) {
     remote_target_seen_ = true;
 }
 
+void Helm::setArrivalBudget(float battery_power_w, uint32_t now_ms) {
+    if (battery_power_w < -5000.0f) {
+        battery_power_w = -5000.0f;
+    } else if (battery_power_w > 5000.0f) {
+        battery_power_w = 5000.0f;
+    }
+    arrival_budget_w_ = battery_power_w;
+    arrival_budget_ms_ = now_ms;
+    arrival_budget_seen_ = true;
+}
+
 HelmOutput Helm::step(uint32_t now_ms, float dt_s,
                       const BatterySample& battery, const SolarSample& solar,
                       const GpsSample& gps) {
@@ -67,11 +83,18 @@ HelmOutput Helm::step(uint32_t now_ms, float dt_s,
     float target_w = 0.0f;
     GuardOutput guard;  // defaults to a full ceiling when not automatic
     if (modes_.isAutomatic()) {
-        // REMOTE degrades to self-contained SOLAR when the phone goes quiet.
+        // Phone-fed modes degrade to self-contained SOLAR when the phone
+        // goes quiet (the ESP32 never depends on the phone for safety).
         if (modes_.mode() == Mode::kRemote &&
             (now_ms - remote_target_ms_) > cfg_.remote_timeout_ms) {
             faults |= kFaultRemoteStale;
             modes_.degrade(Mode::kSolar, "remote_stale", now_ms);
+            controller_.reset();
+        }
+        if (modes_.mode() == Mode::kArrival &&
+            (now_ms - arrival_budget_ms_) > cfg_.remote_timeout_ms) {
+            faults |= kFaultArrivalStale;
+            modes_.degrade(Mode::kSolar, "arrival_stale", now_ms);
             controller_.reset();
         }
 
@@ -84,16 +107,23 @@ HelmOutput Helm::step(uint32_t now_ms, float dt_s,
         }
     }
     if (modes_.isAutomatic()) {
-        target_w = modes_.targetBatteryPower(battery.soc_pct);
+        target_w = modes_.targetBatteryPower(battery.soc_pct,
+                                             arrival_budget_w_);
         if (modes_.reserveActive()) {
             faults |= kFaultSocAtReserve;
         }
-        if (modes_.mode() == Mode::kRemote && !modes_.reserveActive()) {
-            // Execute the phone's power target open-loop through the same
-            // ramps and ceiling; at the reserve floor REMOTE behaves like
-            // SOLAR (net battery discharge is refused).
-            float desired_pct =
-                remote_target_w_ / cfg_.motor_max_power_w * 100.0f;
+        const bool open_loop_power = modes_.mode() == Mode::kRemote ||
+                                     modes_.mode() == Mode::kRange;
+        if (open_loop_power && !modes_.reserveActive()) {
+            // Execute a fixed motor-power setpoint (the phone's REMOTE
+            // target, or the configured RANGE best-efficiency power)
+            // open-loop through the same ramps and ceiling; at the reserve
+            // floor these modes behave like SOLAR (net battery discharge
+            // is refused).
+            const float power_w = modes_.mode() == Mode::kRange
+                                      ? cfg_.range_motor_power_w
+                                      : remote_target_w_;
+            float desired_pct = power_w / cfg_.motor_max_power_w * 100.0f;
             if (desired_pct > guard.ceiling_pct) {
                 desired_pct = guard.ceiling_pct;
             }

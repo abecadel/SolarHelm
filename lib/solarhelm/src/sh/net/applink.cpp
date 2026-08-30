@@ -39,52 +39,59 @@ int writeTelemetryJson(const TelemetryRecord& r, char* buf, size_t buf_len) {
         r.longitude_deg);
 }
 
+static int findNumberField(const char* body, size_t len, const char* name,
+                           double* value);
+static int findStringField(const char* body, size_t len, const char* name,
+                           char* out, size_t out_len);
+
+// Maps a wire mode name onto sh::Mode; false for anything unknown.
+static bool modeFromName(const char* name, Mode* out) {
+    if (std::strcmp(name, "manual") == 0) { *out = Mode::kManual; }
+    else if (std::strcmp(name, "solar") == 0) { *out = Mode::kSolar; }
+    else if (std::strcmp(name, "solar+") == 0) { *out = Mode::kSolarPlus; }
+    else if (std::strcmp(name, "range") == 0) { *out = Mode::kRange; }
+    else if (std::strcmp(name, "arrival") == 0) { *out = Mode::kArrival; }
+    else if (std::strcmp(name, "remote") == 0) { *out = Mode::kRemote; }
+    else { return false; }
+    return true;
+}
+
 RemoteCommand parseRemoteCommand(const char* body, size_t len) {
     RemoteCommand out;
+    const RemoteCommand invalid;
     if (body == nullptr || len == 0) return out;
 
-    static const char kKey[] = "\"target_w\"";
-    const size_t key_len = sizeof(kKey) - 1;
-    size_t pos = 0;
-    bool found = false;
-    while (pos + key_len <= len) {
-        if (std::memcmp(body + pos, kKey, key_len) == 0) {
-            found = true;
-            pos += key_len;
-            break;
+    double v = 0.0;
+    int rc = findNumberField(body, len, "target_w", &v);
+    if (rc < 0) return invalid;
+    if (rc == 1) {
+        if (v < 0.0 || v > static_cast<double>(kRemoteTargetMaxW)) {
+            return invalid;
         }
-        ++pos;
+        out.has_target = true;
+        out.target_w = static_cast<float>(v);
     }
-    if (!found) return out;
 
-    while (pos < len && (body[pos] == ' ' || body[pos] == '\t')) ++pos;
-    if (pos >= len || body[pos] != ':') return out;
-    ++pos;
-    while (pos < len && (body[pos] == ' ' || body[pos] == '\t')) ++pos;
-
-    char num[32];
-    size_t n = 0;
-    while (pos < len && n + 1 < sizeof(num)) {
-        const char c = body[pos];
-        const bool number_char =
-            (c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.' ||
-            c == 'e' || c == 'E';
-        if (!number_char) break;
-        num[n++] = c;
-        ++pos;
+    rc = findNumberField(body, len, "arrival_battery_w", &v);
+    if (rc < 0) return invalid;
+    if (rc == 1) {
+        if (v < -static_cast<double>(kArrivalBudgetMaxW) ||
+            v > static_cast<double>(kArrivalBudgetMaxW)) {
+            return invalid;
+        }
+        out.has_arrival = true;
+        out.arrival_battery_w = static_cast<float>(v);
     }
-    if (n == 0) return out;
-    num[n] = '\0';
 
-    char* end = nullptr;
-    const double value = std::strtod(num, &end);
-    if (end != num + n) return out;  // trailing junk inside the token
-    if (!std::isfinite(value) || value < 0.0 ||
-        value > static_cast<double>(kRemoteTargetMaxW)) {
-        return out;
+    char mode_name[16];
+    rc = findStringField(body, len, "mode", mode_name, sizeof(mode_name));
+    if (rc < 0) return invalid;
+    if (rc == 1) {
+        if (!modeFromName(mode_name, &out.mode)) return invalid;
+        out.has_mode = true;
     }
-    out.valid = true;
-    out.target_w = static_cast<float>(value);
+
+    out.valid = out.has_target || out.has_arrival || out.has_mode;
     return out;
 }
 
@@ -100,6 +107,8 @@ const ConfigField kConfigFields[] = {
     {"reserve_soc_pct", &ControlConfig::reserve_soc_pct},
     {"reserve_hysteresis_pct", &ControlConfig::reserve_hysteresis_pct},
     {"motor_max_power_w", &ControlConfig::motor_max_power_w},
+    // APPEND ONLY: NVS persists these by index (f0..fN, firmware/main.cpp).
+    {"range_motor_power_w", &ControlConfig::range_motor_power_w},
 };
 const size_t kConfigFieldCount =
     sizeof(kConfigFields) / sizeof(kConfigFields[0]);
@@ -163,6 +172,41 @@ static int findNumberField(const char* body, size_t len, const char* name,
     const double v = std::strtod(num, &end);
     if (end != num + n || !std::isfinite(v)) return -1;
     *value = v;
+    return 1;
+}
+
+// Finds `"name"` in body and copies the quoted string value after the
+// colon into out. Returns 0 when absent, 1 on success, -1 when the value
+// is not a quoted string that fits out_len.
+static int findStringField(const char* body, size_t len, const char* name,
+                           char* out, size_t out_len) {
+    char key[64];
+    std::snprintf(key, sizeof(key), "\"%s\"", name);
+    const size_t key_len = std::strlen(key);
+    size_t pos = 0;
+    bool found = false;
+    while (pos + key_len <= len) {
+        if (std::memcmp(body + pos, key, key_len) == 0) {
+            found = true;
+            pos += key_len;
+            break;
+        }
+        ++pos;
+    }
+    if (!found) return 0;
+    while (pos < len && (body[pos] == ' ' || body[pos] == '\t')) ++pos;
+    if (pos >= len || body[pos] != ':') return -1;
+    ++pos;
+    while (pos < len && (body[pos] == ' ' || body[pos] == '\t')) ++pos;
+    if (pos >= len || body[pos] != '"') return -1;
+    ++pos;
+    size_t n = 0;
+    while (pos < len && body[pos] != '"') {
+        if (n + 1 >= out_len) return -1;  // longer than any known value
+        out[n++] = body[pos++];
+    }
+    if (pos >= len) return -1;  // unterminated string
+    out[n] = '\0';
     return 1;
 }
 

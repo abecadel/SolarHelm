@@ -50,13 +50,16 @@ export function httpLink(fetchImpl, baseUrl) {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return resp.json();
     },
-    async sendRemote(targetW) {
+    async sendCommand(cmd) {
       const resp = await fetchImpl(`${base}/remote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target_w: targetW }),
+        body: JSON.stringify(cmd),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    },
+    async sendRemote(targetW) {
+      return this.sendCommand({ target_w: targetW });
     },
     async readConfig() {
       const resp = await fetchImpl(`${base}/config`);
@@ -96,9 +99,12 @@ export async function connectBle(bluetooth) {
       const view = await telemetryChar.readValue();
       return JSON.parse(new TextDecoder().decode(view));
     },
-    async sendRemote(targetW) {
+    async sendCommand(cmd) {
       await remoteChar.writeValue(
-          new TextEncoder().encode(JSON.stringify({ target_w: targetW })));
+          new TextEncoder().encode(JSON.stringify(cmd)));
+    },
+    async sendRemote(targetW) {
+      return this.sendCommand({ target_w: targetW });
     },
     disconnect() {
       if (device.gatt.connected) device.gatt.disconnect();

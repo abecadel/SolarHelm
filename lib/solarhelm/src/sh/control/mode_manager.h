@@ -1,10 +1,11 @@
 // ModeManager — cruise-strategy state machine.
 //
-// V1 modes: MANUAL (SolarHelm hands off), SOLAR (target battery power 0 W),
-// SOLAR_PLUS (allow a configured constant battery contribution, e.g. -200 W).
-// RANGE / RESERVE-as-mode / ARRIVAL are documented in docs/CONTROL_THEORY.md
-// and arrive in later milestones; the reserve-SOC *floor* below applies to
-// every automatic mode already.
+// Modes: MANUAL (SolarHelm hands off), SOLAR (target battery power 0 W),
+// SOLAR_PLUS (allow a configured constant battery contribution, e.g.
+// -200 W), REMOTE (phone-streamed motor power), RANGE (hold the
+// configured best-efficiency motor power), ARRIVAL (phone-streamed
+// battery-power budget). The reserve-SOC *floor* below applies to every
+// automatic mode.
 //
 // Safety rules enforced here:
 //  - Boot mode is always MANUAL; a previous auto mode is never restored.
@@ -33,6 +34,13 @@ enum class Mode : uint8_t {
     // ramps, the protection envelope, the reserve floor, and degrades to
     // SOLAR when the stream goes stale.
     kRemote = 3,
+    // Hold cfg.range_motor_power_w (the hull's best-efficiency point,
+    // written once by the app from the learned model) open-loop like
+    // REMOTE — fully autonomous, no phone needed underway.
+    kRange = 4,
+    // Track a phone-streamed battery-power budget closed-loop (net
+    // discharge allowed); degrades to SOLAR when the stream goes stale.
+    kArrival = 5,
 };
 
 const char* modeName(Mode m);
@@ -62,8 +70,9 @@ public:
 
     // Battery-power target for the active mode, with the reserve-SOC floor
     // applied (latched with hysteresis; see updateReserveLatch). Only
-    // meaningful when isAutomatic().
-    float targetBatteryPower(float soc_pct);
+    // meaningful when isAutomatic(). ARRIVAL's live budget is passed in
+    // by the Helm (it owns the stream); other modes ignore it.
+    float targetBatteryPower(float soc_pct, float arrival_budget_w = 0.0f);
 
     bool isAutomatic() const { return mode_ != Mode::kManual; }
     Mode mode() const { return mode_; }

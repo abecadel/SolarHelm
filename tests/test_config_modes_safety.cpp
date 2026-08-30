@@ -95,6 +95,14 @@ TEST(config_rejects_every_bad_field) {
          ConfigError::kBadBatteryGuard},
         {[](ControlConfig& c) { c.temp_derate_cap_pct = 0.0f; },
          ConfigError::kBadBatteryGuard},
+        {[](ControlConfig& c) { c.range_motor_power_w = 0.0f; },
+         ConfigError::kBadRangePower},
+        {[](ControlConfig& c) { c.range_motor_power_w = -50.0f; },
+         ConfigError::kBadRangePower},
+        {[](ControlConfig& c) {
+             c.range_motor_power_w = c.motor_max_power_w + 1.0f;
+         },
+         ConfigError::kBadRangePower},
     };
     for (const Case& c : cases) {
         ControlConfig cfg;
@@ -111,6 +119,7 @@ TEST(config_error_names_are_distinct) {
         ConfigError::kBadCommandLimits, ConfigError::kBadReserveSoc,
         ConfigError::kBadSolarPlusTarget, ConfigError::kBadTimeouts,
         ConfigError::kBadMotorPower, ConfigError::kBadBatteryGuard,
+        ConfigError::kBadRangePower,
     };
     std::vector<std::string> names;
     for (ConfigError e : all) {
@@ -147,6 +156,8 @@ TEST(mode_names) {
     CHECK(std::string(sh::modeName(Mode::kSolar)) == "SOLAR");
     CHECK(std::string(sh::modeName(Mode::kSolarPlus)) == "SOLAR+");
     CHECK(std::string(sh::modeName(Mode::kRemote)) == "REMOTE");
+    CHECK(std::string(sh::modeName(Mode::kRange)) == "RANGE");
+    CHECK(std::string(sh::modeName(Mode::kArrival)) == "ARRIVAL");
     CHECK(std::string(sh::modeName(static_cast<Mode>(99))) == "UNKNOWN");
 }
 
@@ -219,6 +230,20 @@ TEST(mode_targets_solar_and_solar_plus) {
     CHECK_NEAR(mm.targetBatteryPower(80.0f), 0.0f, 1e-6);
     mm.requestMode(Mode::kSolarPlus, true, 0);
     CHECK_NEAR(mm.targetBatteryPower(80.0f), cfg.solar_plus_target_w, 1e-6);
+}
+
+TEST(mode_arrival_tracks_the_streamed_budget_with_the_reserve_floor) {
+    ControlConfig cfg;  // reserve 20%, deadband 25 W
+    ModeManager mm(cfg, nullptr);
+    mm.requestMode(Mode::kArrival, true, 0);
+    // The live budget passes straight through above reserve...
+    CHECK_NEAR(mm.targetBatteryPower(80.0f, -150.0f), -150.0f, 1e-6);
+    CHECK_NEAR(mm.targetBatteryPower(80.0f, 40.0f), 40.0f, 1e-6);
+    // ...and is floored at the reserve like every automatic mode.
+    CHECK_NEAR(mm.targetBatteryPower(19.0f, -150.0f), cfg.deadband_w, 1e-6);
+    // Other modes ignore the budget argument entirely.
+    mm.requestMode(Mode::kRange, true, 0);
+    CHECK_NEAR(mm.targetBatteryPower(80.0f, -150.0f), 0.0f, 1e-6);
 }
 
 TEST(mode_reserve_floor_clamps_target_with_hysteresis) {

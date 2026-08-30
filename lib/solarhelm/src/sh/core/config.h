@@ -27,6 +27,7 @@ enum class ConfigError : uint8_t {
     kBadTimeouts,
     kBadMotorPower,
     kBadBatteryGuard,
+    kBadRangePower,
 };
 
 const char* configErrorName(ConfigError e);
@@ -52,6 +53,9 @@ struct ControlConfig {
     // SOLAR+ battery contribution: target battery power while in SOLAR_PLUS.
     // Must be <= 0 (a discharge allowance, e.g. -200 W).
     float solar_plus_target_w = -200.0f;
+    // RANGE motor power: the hull's best-efficiency point, written once by
+    // the app from the learned model (0 < x <= motor_max_power_w).
+    float range_motor_power_w = 350.0f;
     float reserve_soc_pct = 20.0f;  // below this, no net discharge is allowed
     // The reserve floor latches on at reserve_soc_pct and releases only when
     // SOC has recovered by this much (prevents target chatter right at the

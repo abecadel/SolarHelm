@@ -147,9 +147,14 @@ on the water (`tools/pack_fs.sh` + `pio run -t uploadfs`;
   and Web Bluetooth requires exactly the secure context the hosted app
   has; the phone keeps its internet for forecasts and tiles). iOS has no
   Web Bluetooth and uses the boat-served app. 1 Hz telemetry with
-  decoded fault flags, REMOTE power-target sender, and a session
+  decoded fault flags, a cruise-mode selector (SOLAR, SOLAR+, **RANGE**,
+  **ARRIVAL**, MANUAL), REMOTE power-target sender, and a session
   recorder exporting the exact firmware CSV (positions included) for
-  the learner.
+  the learner. ARRIVAL is a phone-streamed battery-power budget: the
+  tab re-sends it with every 1 s poll, and the boat degrades to SOLAR
+  on its own 10 s after the stream stops (`arrival-stale` fault). RANGE
+  needs no phone at all once Setup has written the learned
+  best-efficiency power into the boat's config.
 - **Model** — everything learned (`js/model_ui.js`): hull curve,
   recommended cruise band (EnergyKnee), solar-equilibrium speed,
   calibration state, CUSUM drift, geo/provider store counts, the
@@ -158,7 +163,10 @@ on the water (`tools/pack_fs.sh` + `pio run -t uploadfs`;
   with `config_revision` bump + change note on every save (persisted
   locally), plus **boat-side control tunables over the SoftAP**
   (`GET/POST /config`): a whitelisted parameter set the boat validates
-  and stores in NVS — deliberately Wi-Fi-only, at the dock.
+  and stores in NVS — deliberately Wi-Fi-only, at the dock. Includes
+  *Set RANGE power from learned model*: the EnergyKnee speed (floored
+  at steerage) → hull power → `range_motor_power_w`, so RANGE mode
+  cruises at the learned efficiency optimum fully autonomously.
 
 Online data is offline-first: forecast fetches go through
 `js/net_cache.js`, so payloads downloaded while the phone had internet

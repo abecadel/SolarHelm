@@ -49,12 +49,18 @@ docs/WIRING.md with calculated fusing.
 ## Milestone 4 — Sea trials
 
 docs/SEA_TRIALS.md protocol; learned hull curve committed; gain/deadband
-tuning; RANGE mode implementation on the measured curve.
+tuning; ~~RANGE mode implementation~~ ✅ RANGE mode shipped in the core
+(open-loop hold of `range_motor_power_w`, sim-validated in the
+`RangeCruise` scenario) — sea trials calibrate the value on the measured
+curve via the Setup tab's "Set RANGE power from learned model".
 
 ## Future (documented, deliberately not started)
 
-- solar + weather forecast feeding an on-board energy budget (ARRIVAL mode
-  with destination SOC, "energy budget by sunset")
+- ~~solar + weather forecast feeding an on-board energy budget (ARRIVAL
+  mode with destination SOC)~~ ✅ ARRIVAL mode shipped: the phone's
+  voyage plan streams a battery-power budget the boat tracks
+  closed-loop, degrading to SOLAR 10 s after the stream stops
+  (`ArrivalBudget` scenario) — forecasts stay on the phone by design
 - planner app ↔ boat live link (ESP32 Wi-Fi API: telemetry out, curve sync)
 - ~~route planning, wind/current compensation~~ ✅ planner v2 in the PWA:
   global-first providers (waves + ocean currents), learned hull model,

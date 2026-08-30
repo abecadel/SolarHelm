@@ -89,6 +89,10 @@ private:
     float hotel_w_;
     float motor_cmd_pct_ = 0.0f;  // command applied next tick (actuation lag)
     bool auto_requested_ = false;
+    // ARRIVAL phone-stream stand-in: while streaming, the budget is
+    // re-sent to the Helm every tick (kStopArrivalStream ends it).
+    bool arrival_streaming_ = false;
+    float arrival_stream_w_ = 0.0f;
     double lat_deg_ = 43.5081;   // Split, Croatia
     double lon_deg_ = 16.4402;
 };

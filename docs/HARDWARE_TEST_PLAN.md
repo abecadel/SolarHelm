@@ -112,8 +112,13 @@ via `POST /remote {"target_w": N}` on the ESP32's SoftAP HTTP API
 the stream stops. Flash the companion app into LittleFS first
 (`tools/pack_fs.sh` then `pio run -e esp32s3 -t uploadfs`) and verify
 the ESP32 serves it at `http://192.168.4.1/` — the phone's Boat tab must
-show live telemetry with no internet anywhere. Also verify: the **BLE
-link** (Android Chrome on the HTTPS app: connect, live telemetry, a
+show live telemetry with no internet anywhere. Verify the two new
+cruise modes: **RANGE** (push `range_motor_power_w` from Setup, engage
+RANGE from the Boat tab, unplug the phone — the meter must hold the
+configured power indefinitely) and **ARRIVAL** (engage with a −150 W
+budget, watch the closed loop track it, then kill the app — the boat
+must degrade to SOLAR within ~10 s raising `arrival-stale`). Also
+verify: the **BLE link** (Android Chrome on the HTTPS app: connect, live telemetry, a
 REMOTE target, all while the phone keeps LTE internet); **Wi-Fi+BLE
 coexistence** (no watchdog resets, control tick stays 10 Hz under both
 links active); and **/config** (change `deadband_w` from the Setup tab,

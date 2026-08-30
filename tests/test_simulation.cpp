@@ -239,6 +239,65 @@ TEST(scenario_events_cover_remaining_types) {
     CHECK(sim.helm().mode() == sh::Mode::kSolar);
 }
 
+TEST(scenario_range_cruise_holds_the_configured_power) {
+    const std::vector<TickResult> r = runByName("RangeCruise");
+    // Settled portion: the motor holds the configured RANGE power
+    // (default 350 W of 1164 W -> ~30%) without any streamed target.
+    const TickResult& last = r.back();
+    CHECK(static_cast<sh::Mode>(last.telemetry.mode) == sh::Mode::kRange);
+    CHECK_NEAR(last.telemetry.motor_estimated_power_w, 350.0f, 15.0f);
+    CHECK(last.telemetry.distance_today_km > 1.0f);
+}
+
+TEST(scenario_arrival_budget_streams_then_degrades) {
+    const std::vector<TickResult> r = runByName("ArrivalBudget");
+    bool saw_arrival = false;
+    bool saw_stale_fault = false;
+    for (const TickResult& t : r) {
+        const sh::Mode m = static_cast<sh::Mode>(t.telemetry.mode);
+        if (t.t_s > 700.0f && t.t_s < 1700.0f && m == sh::Mode::kArrival) {
+            saw_arrival = true;
+        }
+        if ((t.telemetry.fault_flags & sh::kFaultArrivalStale) != 0) {
+            saw_stale_fault = true;
+        }
+    }
+    CHECK(saw_arrival);
+    CHECK(saw_stale_fault);
+    // After the phone went quiet the boat cruises on in SOLAR.
+    CHECK(static_cast<sh::Mode>(r.back().telemetry.mode) == sh::Mode::kSolar);
+}
+
+TEST(scenario_events_cover_range_and_arrival_requests) {
+    Scenario s;
+    s.name = "ModeEventKitchenSink";
+    s.description = "range/arrival event coverage";
+    s.duration_s = 300.0f;
+    s.dt_s = 0.5f;
+    s.solar.waveform = simc::SolarWaveform::kConstant;
+    s.solar.peak_w = 600.0f;
+    s.events.push_back({50.0f, simc::EventType::kRequestRange, 0.0f});
+    s.events.push_back({100.0f, simc::EventType::kSetArrivalBudget, -100.0f});
+    s.events.push_back({100.0f, simc::EventType::kRequestArrival, 0.0f});
+    s.events.push_back({200.0f, simc::EventType::kStopArrivalStream, 0.0f});
+
+    const simc::BoatProfile profile = simc::defaultBoatProfile();
+    const sh::ControlConfig cfg = defaultConfig();
+    Simulation sim(profile, s, cfg);
+    const std::vector<TickResult> r = sim.run();
+
+    bool saw_range = false;
+    for (const TickResult& t : r) {
+        const sh::Mode m = static_cast<sh::Mode>(t.telemetry.mode);
+        if (t.t_s > 55.0f && t.t_s < 95.0f && m == sh::Mode::kRange) {
+            saw_range = true;
+        }
+    }
+    CHECK(saw_range);
+    // Stream stopped at 200 s; by the end (10 s+ later) ARRIVAL degraded.
+    CHECK(sim.helm().mode() == sh::Mode::kSolar);
+}
+
 TEST(simulation_is_deterministic) {
     const Scenario* sc = findScenario("CroatiaPassingClouds");
     CHECK(sc != nullptr);

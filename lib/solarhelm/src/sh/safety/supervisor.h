@@ -36,6 +36,7 @@ enum FaultFlag : uint16_t {
     kFaultBattTempDerate = 1u << 10,   // battery too cold/hot: derated
     kFaultChargeBelowFreezing = 1u << 11,  // charging while <= 0 degC (alert)
     kFaultRemoteStale = 1u << 12,   // phone target stale -> degraded to SOLAR
+    kFaultArrivalStale = 1u << 13,  // arrival budget stale -> degraded to SOLAR
 };
 
 struct SafetyVerdict {

@@ -16,6 +16,7 @@ const char* configErrorName(ConfigError e) {
         case ConfigError::kBadTimeouts: return "bad_timeouts";
         case ConfigError::kBadMotorPower: return "bad_motor_power";
         case ConfigError::kBadBatteryGuard: return "bad_battery_guard";
+        case ConfigError::kBadRangePower: return "bad_range_power";
         default: return "unknown";
     }
 }
@@ -54,6 +55,10 @@ ConfigError ControlConfig::validate() const {
     }
     if (!(motor_max_power_w > 0.0f)) {
         return ConfigError::kBadMotorPower;
+    }
+    if (!(range_motor_power_w > 0.0f) ||
+        !(range_motor_power_w <= motor_max_power_w)) {
+        return ConfigError::kBadRangePower;
     }
     if (!(sag_stop_v > 0.0f) || !(sag_stop_v < sag_hard_v) ||
         !(sag_hard_v < sag_soft_v) || !(sag_release_margin_v >= 0.0f) ||

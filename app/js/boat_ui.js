@@ -14,13 +14,14 @@ import {
 export { DEFAULT_BOAT_URL };
 export const POLL_MS = 1000;
 
-export const MODE_NAMES = ['MANUAL', 'SOLAR', 'SOLAR+', 'REMOTE'];
+export const MODE_NAMES = ['MANUAL', 'SOLAR', 'SOLAR+', 'REMOTE', 'RANGE',
+                           'ARRIVAL'];
 
 export const FAULT_NAMES = [
   'battery-stale', 'battery-implausible', 'gps-stale', 'soc-at-reserve',
   'config-invalid', 'solar-stale', 'sag-soft', 'sag-hard', 'sag-stop',
   'over-current', 'batt-temp-derate', 'charge-below-freezing',
-  'remote-stale',
+  'remote-stale', 'arrival-stale',
 ];
 
 export function decodeFaults(flags) {
@@ -81,6 +82,12 @@ export async function pollOnce(deps, state) {
   const doc = deps.doc;
   try {
     const t = await state.link.readTelemetry();
+    // While ARRIVAL is engaged, every poll re-streams the budget so the
+    // boat's 10 s staleness watchdog stays fed (1 s cadence).
+    if (state.arrivalBudget !== null && state.arrivalBudget !== undefined) {
+      await state.link.sendCommand({
+        arrival_battery_w: state.arrivalBudget });
+    }
     state.samples.push(t);
     renderTelemetry(doc, t);
     doc.getElementById('boat-status').textContent =
@@ -121,6 +128,42 @@ export async function sendRemote(deps, state) {
   }
 }
 
+/** Requests a cruise mode; ARRIVAL also starts the budget stream. */
+export async function sendMode(deps, state) {
+  const doc = deps.doc;
+  const status = doc.getElementById('boat-mode-status');
+  if (!state.link) {
+    status.textContent = 'Connect to the boat first.';
+    return false;
+  }
+  const mode = doc.getElementById('boat-mode').value;
+  const cmd = { mode };
+  if (mode === 'arrival') {
+    const budget = parseFloat(doc.getElementById('boat-budget').value);
+    if (!Number.isFinite(budget) || Math.abs(budget) > 5000) {
+      status.textContent =
+          'Enter an arrival battery budget in watts (negative = allowed ' +
+          'net discharge, within ±5000).';
+      return false;
+    }
+    cmd.arrival_battery_w = budget;
+  }
+  try {
+    await state.link.sendCommand(cmd);
+    state.arrivalBudget = mode === 'arrival' ? cmd.arrival_battery_w : null;
+    status.textContent = mode === 'arrival'
+        ? `ARRIVAL engaged: ${cmd.arrival_battery_w.toFixed(0)} W battery ` +
+          'budget, re-streamed every second while connected. The boat ' +
+          'degrades to SOLAR 10 s after the stream stops.'
+        : `Mode ${mode.toUpperCase()} requested.`;
+    return true;
+  } catch (err) {
+    status.textContent =
+        `Send failed: ${err && err.message ? err.message : err}`;
+    return false;
+  }
+}
+
 async function buildLink(deps) {
   const doc = deps.doc;
   const transport = doc.getElementById('boat-transport').value;
@@ -143,7 +186,7 @@ async function buildLink(deps) {
 export function initBoat(deps) {
   const doc = deps.doc;
   const state = { link: null, samples: [], timer: null,
-                  connecting: false };
+                  connecting: false, arrivalBudget: null };
   doc.getElementById('boat-url').value = DEFAULT_BOAT_URL;
 
   const stop = () => {
@@ -155,6 +198,7 @@ export function initBoat(deps) {
       state.link.disconnect();
       state.link = null;
     }
+    state.arrivalBudget = null;  // never stream into a dead link
     doc.getElementById('boat-connect').textContent = 'Connect';
   };
 
@@ -188,6 +232,9 @@ export function initBoat(deps) {
 
   doc.getElementById('boat-send').addEventListener('click',
       () => sendRemote(deps, state));
+
+  doc.getElementById('boat-mode-set').addEventListener('click',
+      () => sendMode(deps, state));
 
   doc.getElementById('boat-export').addEventListener('click', () => {
     if (state.samples.length === 0) {

@@ -63,6 +63,14 @@ public:
     // as every other automatic mode.
     void setRemoteTarget(float motor_power_w, uint32_t now_ms);
 
+    // ARRIVAL mode: the phone's voyage plan streams a battery-power budget
+    // (negative = permitted net discharge, clamped to +/-5000 W). Same
+    // freshness contract as REMOTE: entering kArrival is refused without a
+    // fresh budget, and a budget older than cfg.remote_timeout_ms degrades
+    // the mode to SOLAR. The budget is tracked closed-loop and the
+    // reserve-SOC floor still applies.
+    void setArrivalBudget(float battery_power_w, uint32_t now_ms);
+
     // One control tick: dt_s since the previous step; samples may be stale
     // or invalid — Helm decides what is trustworthy.
     HelmOutput step(uint32_t now_ms, float dt_s, const BatterySample& battery,
@@ -82,11 +90,15 @@ private:
     BatteryGuard guard_;
     EnergyTracker energy_;
     SafetyVerdict last_verdict_;
-    // REMOTE mode state.
+    // REMOTE/RANGE open-loop ramp + REMOTE target state.
     RateLimiter remote_ramp_;
     float remote_target_w_ = 0.0f;
     uint32_t remote_target_ms_ = 0;
     bool remote_target_seen_ = false;
+    // ARRIVAL budget stream state.
+    float arrival_budget_w_ = 0.0f;
+    uint32_t arrival_budget_ms_ = 0;
+    bool arrival_budget_seen_ = false;
 };
 
 }  // namespace sh

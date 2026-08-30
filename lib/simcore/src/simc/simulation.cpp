@@ -80,6 +80,25 @@ void Simulation::applyDueEvents() {
                 helm_.requestMode(sh::Mode::kSolarPlus,
                                   static_cast<uint32_t>(t_s_ * 1000.0f));
                 break;
+            case EventType::kRequestRange:
+                helm_.requestMode(sh::Mode::kRange,
+                                  static_cast<uint32_t>(t_s_ * 1000.0f));
+                break;
+            case EventType::kRequestArrival:
+                helm_.requestMode(sh::Mode::kArrival,
+                                  static_cast<uint32_t>(t_s_ * 1000.0f));
+                break;
+            case EventType::kSetArrivalBudget:
+                // The "phone" starts streaming this budget (re-sent every
+                // tick until kStopArrivalStream).
+                arrival_streaming_ = true;
+                arrival_stream_w_ = e.value;
+                helm_.setArrivalBudget(e.value,
+                                       static_cast<uint32_t>(t_s_ * 1000.0f));
+                break;
+            case EventType::kStopArrivalStream:
+                arrival_streaming_ = false;
+                break;
         }
         ++next_event_;
     }
@@ -115,6 +134,11 @@ TickResult Simulation::step() {
     if (!auto_requested_ && t_s_ >= 2.0f * dt_s) {
         auto_requested_ =
             helm_.requestMode(scenario_.auto_request_mode, now_ms);
+    }
+
+    // The streaming phone keeps the ARRIVAL budget fresh every tick.
+    if (arrival_streaming_) {
+        helm_.setArrivalBudget(arrival_stream_w_, now_ms);
     }
 
     // --- The real controller decides. ---

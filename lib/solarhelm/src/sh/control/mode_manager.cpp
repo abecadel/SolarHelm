@@ -8,6 +8,8 @@ const char* modeName(Mode m) {
         case Mode::kSolar: return "SOLAR";
         case Mode::kSolarPlus: return "SOLAR+";
         case Mode::kRemote: return "REMOTE";
+        case Mode::kRange: return "RANGE";
+        case Mode::kArrival: return "ARRIVAL";
         default: return "UNKNOWN";
     }
 }
@@ -55,11 +57,14 @@ void ModeManager::updateReserveLatch(float soc_pct) {
     }
 }
 
-float ModeManager::targetBatteryPower(float soc_pct) {
+float ModeManager::targetBatteryPower(float soc_pct,
+                                      float arrival_budget_w) {
     updateReserveLatch(soc_pct);
     float target_w = 0.0f;
     if (mode_ == Mode::kSolarPlus) {
         target_w = cfg_.solar_plus_target_w;
+    } else if (mode_ == Mode::kArrival) {
+        target_w = arrival_budget_w;
     }
     // Reserve floor: at/below reserve SOC net discharge is forbidden. The
     // target is raised to +deadband so that even the worst-case rest point

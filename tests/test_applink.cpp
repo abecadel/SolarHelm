@@ -95,7 +95,59 @@ TEST(remote_command_accepts_a_plain_target) {
     const char body[] = "{\"target_w\": 350.5}";
     const RemoteCommand c = sh::parseRemoteCommand(body, sizeof(body) - 1);
     CHECK(c.valid);
+    CHECK(c.has_target);
+    CHECK(!c.has_arrival);
+    CHECK(!c.has_mode);
     CHECK_NEAR(c.target_w, 350.5f, 1e-4);
+}
+
+TEST(remote_command_parses_arrival_budget_and_mode) {
+    const char body[] =
+        "{\"mode\": \"arrival\", \"arrival_battery_w\": -150.5}";
+    const RemoteCommand c = sh::parseRemoteCommand(body, sizeof(body) - 1);
+    CHECK(c.valid);
+    CHECK(!c.has_target);
+    CHECK(c.has_arrival);
+    CHECK_NEAR(c.arrival_battery_w, -150.5f, 1e-4);
+    CHECK(c.has_mode);
+    CHECK(c.mode == sh::Mode::kArrival);
+}
+
+TEST(remote_command_parses_every_mode_name) {
+    const struct { const char* name; sh::Mode mode; } cases[] = {
+        {"manual", sh::Mode::kManual},   {"solar", sh::Mode::kSolar},
+        {"solar+", sh::Mode::kSolarPlus}, {"range", sh::Mode::kRange},
+        {"arrival", sh::Mode::kArrival}, {"remote", sh::Mode::kRemote},
+    };
+    for (const auto& tc : cases) {
+        std::string body = std::string("{\"mode\": \"") + tc.name + "\"}";
+        const RemoteCommand c =
+            sh::parseRemoteCommand(body.c_str(), body.size());
+        CHECK(c.valid);
+        CHECK(c.has_mode);
+        CHECK(c.mode == tc.mode);
+    }
+}
+
+TEST(remote_command_rejects_bad_arrival_and_mode_values) {
+    const struct { const char* body; } cases[] = {
+        {"{\"arrival_battery_w\": nan}"},       // not a number token
+        {"{\"arrival_battery_w\": -5001}"},     // below the envelope
+        {"{\"arrival_battery_w\": 5001}"},      // above the envelope
+        {"{\"arrival_battery_w\"}"},            // no colon
+        {"{\"mode\": \"warp\"}"},               // unknown mode name
+        {"{\"mode\"}"},                         // no colon
+        {"{\"mode\": 3}"},                      // not a quoted string
+        {"{\"mode\": \"solar}"},                // unterminated string
+        {"{\"mode\": \"a-very-long-mode-name-x\"}"},  // over the buffer
+        {"{\"target_w\": 300, \"mode\": \"warp\"}"},  // one bad key kills all
+    };
+    for (const auto& tc : cases) {
+        const RemoteCommand c =
+            sh::parseRemoteCommand(tc.body, std::strlen(tc.body));
+        CHECK(!c.valid);
+        CHECK(!c.has_target);
+    }
 }
 
 TEST(remote_command_tolerates_extra_keys_and_whitespace) {

@@ -4,9 +4,11 @@ import { test } from 'node:test';
 import {
   CSV_HEADER,
   DEFAULT_BOAT_URL,
+  MODE_NAMES,
   decodeFaults,
   initBoat,
   pollOnce,
+  sendMode,
   sendRemote,
   toCsv,
 } from '../js/boat_ui.js';
@@ -29,6 +31,9 @@ test('decodeFaults names the raised bits', () => {
   assert.deepEqual(decodeFaults(0), []);
   assert.deepEqual(decodeFaults(1 << 0 | 1 << 6 | 1 << 12),
                    ['battery-stale', 'sag-soft', 'remote-stale']);
+  assert.deepEqual(decodeFaults(1 << 13), ['arrival-stale']);
+  assert.equal(MODE_NAMES[4], 'RANGE');
+  assert.equal(MODE_NAMES[5], 'ARRIVAL');
 });
 
 test('toCsv emits the firmware CSV format, positions included', () => {
@@ -129,6 +134,73 @@ test('sendRemote posts a valid target and reports failures', async () => {
   await fire(failing.doc, 'boat-connect', 'click');
   assert.equal(await sendRemote(failing, fState), false);
   assert.ok(failing.doc.getElementById('boat-remote-status').textContent
+      .includes('Send failed'));
+});
+
+test('sendMode requests modes and streams the ARRIVAL budget', async () => {
+  const posts = [];
+  const deps = boatDeps(async (url, opts) => {
+    if (opts && opts.method === 'POST') {
+      posts.push(JSON.parse(opts.body));
+      return { ok: true };
+    }
+    return { ok: true, json: async () => SAMPLE };
+  }, { 'boat-mode': 'range' });
+  const state = initBoat(deps);
+
+  // Not connected yet: guidance instead of a crash.
+  assert.equal(await sendMode(deps, state), false);
+  assert.ok(deps.doc.getElementById('boat-mode-status').textContent
+      .includes('Connect'));
+
+  await fire(deps.doc, 'boat-connect', 'click');
+  await fire(deps.doc, 'boat-mode-set', 'click');
+  assert.deepEqual(posts[posts.length - 1], { mode: 'range' });
+  assert.equal(state.arrivalBudget, null);
+  assert.ok(deps.doc.getElementById('boat-mode-status').textContent
+      .includes('Mode RANGE requested'));
+
+  // ARRIVAL: budget validated, sent with the mode, then re-streamed on
+  // every poll so the boat's 10 s watchdog stays fed.
+  deps.doc.getElementById('boat-mode').value = 'arrival';
+  deps.doc.getElementById('boat-budget').value = '-150';
+  assert.equal(await sendMode(deps, state), true);
+  assert.deepEqual(posts[posts.length - 1],
+                   { mode: 'arrival', arrival_battery_w: -150 });
+  assert.equal(state.arrivalBudget, -150);
+  const before = posts.length;
+  await deps._timers.set[0].fn(); // one timed poll
+  assert.deepEqual(posts[before], { arrival_battery_w: -150 });
+
+  // Bad budget: refused with guidance, nothing sent.
+  deps.doc.getElementById('boat-budget').value = '-9999';
+  assert.equal(await sendMode(deps, state), false);
+  deps.doc.getElementById('boat-budget').value = 'abc';
+  assert.equal(await sendMode(deps, state), false);
+  assert.ok(deps.doc.getElementById('boat-mode-status').textContent
+      .includes('battery budget'));
+
+  // Leaving ARRIVAL stops the stream; disconnect clears it too.
+  deps.doc.getElementById('boat-mode').value = 'solar';
+  assert.equal(await sendMode(deps, state), true);
+  assert.equal(state.arrivalBudget, null);
+  deps.doc.getElementById('boat-mode').value = 'arrival';
+  deps.doc.getElementById('boat-budget').value = '-100';
+  await sendMode(deps, state);
+  assert.equal(state.arrivalBudget, -100);
+  await fire(deps.doc, 'boat-connect', 'click'); // disconnect
+  assert.equal(state.arrivalBudget, null);
+
+  // A failing link surfaces the error.
+  const failing = boatDeps(async (url, opts) =>
+      (opts && opts.method === 'POST'
+        ? { ok: false, status: 400 }
+        : { ok: true, json: async () => SAMPLE }),
+      { 'boat-mode': 'solar' });
+  const fState = initBoat(failing);
+  await fire(failing.doc, 'boat-connect', 'click');
+  assert.equal(await sendMode(failing, fState), false);
+  assert.ok(failing.doc.getElementById('boat-mode-status').textContent
       .includes('Send failed'));
 });
 

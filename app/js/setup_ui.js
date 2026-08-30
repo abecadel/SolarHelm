@@ -6,6 +6,9 @@
 
 import { DEFAULT_BOAT_URL, guardedHttpLink } from './ble_link.js';
 import { profileValid } from './profile.js';
+import { cruiseBandKmh, hullPowerW } from './vessel_model.js';
+import { loadVessel } from './vessel_store.js';
+import { MIN_STEERAGE_KMH } from './voyage_safety.js';
 
 export const PROFILE_STORAGE_KEY = 'solarhelm.profile.v1';
 
@@ -159,6 +162,38 @@ export async function pushBoatConfig(deps) {
   }
 }
 
+/** Computes the RANGE power from the learned model and writes it into
+ *  the boat's config: the EnergyKnee speed (fastest within tolerance of
+ *  the whole-boat Wh/km minimum, floored at steerage) -> hull power.
+ *  The boat then holds it autonomously (RANGE mode, no phone). */
+export async function fitRangePower(deps, state) {
+  const doc = deps.doc;
+  const status = doc.getElementById('setup-boat-status');
+  const vessel = state.vessel ?? loadVessel(deps.storage, state.profile);
+  const band = cruiseBandKmh(vessel.curve, vessel.hotelW);
+  const speedKmh = Math.max(band.kneeKmh, MIN_STEERAGE_KMH);
+  const powerW = Math.round(hullPowerW(vessel.curve, speedKmh));
+  if (!(powerW > 0)) {
+    status.textContent =
+        'The learned model has no usable hull curve yet — learn from a ' +
+        'voyage log on the Model tab first.';
+    return false;
+  }
+  try {
+    await boatConfigLink(deps).writeConfig({ range_motor_power_w: powerW });
+    status.textContent =
+        `RANGE power set to ${powerW} W (energy knee at ` +
+        `${speedKmh.toFixed(1)} km/h). The boat now holds it in ` +
+        'RANGE mode with no phone attached.';
+    return true;
+  } catch (err) {
+    status.textContent =
+        `Boat refused the RANGE power: ${err && err.message ? err.message
+                                                            : err}`;
+    return false;
+  }
+}
+
 export function initSetup(deps, state, defaults) {
   const doc = deps.doc;
   fillSetupForm(doc, state.profile);
@@ -169,6 +204,8 @@ export function initSetup(deps, state, defaults) {
       () => loadBoatConfig(deps));
   doc.getElementById('setup-boat-push').addEventListener('click',
       () => pushBoatConfig(deps));
+  doc.getElementById('setup-range-fit').addEventListener('click',
+      () => fitRangePower(deps, state));
   doc.getElementById('setup-reset').addEventListener('click', () => {
     state.profile = { ...defaults };
     try {

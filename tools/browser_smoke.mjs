@@ -130,6 +130,9 @@ check(tileStatus.includes('tiles cached'),
 await page.click('#tabbtn-boat');
 check(await page.inputValue('#boat-url') === 'http://192.168.4.1',
       'boat tab shows the SoftAP default address');
+const modeOptions = await page.innerHTML('#boat-mode');
+check(modeOptions.includes('RANGE') && modeOptions.includes('ARRIVAL'),
+      'boat tab offers the RANGE and ARRIVAL cruise modes');
 await page.click('#tabbtn-model');
 const model = await page.innerHTML('#model-summary');
 check(model.includes('recommended cruise band') &&

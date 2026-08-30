@@ -470,6 +470,93 @@ TEST(helm_remote_respects_reserve_floor) {
     CHECK(out.motor_cmd_pct < 20.0f);
 }
 
+TEST(helm_range_holds_the_configured_power_autonomously) {
+    ControlConfig cfg;  // range_motor_power_w 350 of 1164 W -> ~30.1%
+    Helm helm(cfg, nullptr);
+    uint32_t t = 1000;
+    helm.step(t, 0.5f, battSample(t, 100.0f, 80.0f), solarSample(t, 500.0f),
+              gpsSample(t, 1.0f));
+    // No phone, no stream: RANGE enters on the switch alone.
+    CHECK(helm.requestMode(Mode::kRange, t));
+    sh::HelmOutput out;
+    for (int i = 0; i < 100; ++i) {
+        t += 500;
+        out = helm.step(t, 0.5f, battSample(t, 100.0f, 80.0f),
+                        solarSample(t, 500.0f), gpsSample(t, 1.0f));
+    }
+    CHECK_NEAR(out.motor_cmd_pct, 350.0f / 1164.0f * 100.0f, 0.5f);
+    CHECK(out.telemetry.mode == static_cast<uint8_t>(Mode::kRange));
+    CHECK(helm.mode() == Mode::kRange);  // hours later: still no phone needed
+}
+
+TEST(helm_range_respects_reserve_floor) {
+    ControlConfig cfg;
+    cfg.filter_time_constant_s = 0.0f;
+    Helm helm(cfg, nullptr);
+    uint32_t t = 1000;
+    helm.step(t, 0.5f, battSample(t, 100.0f, 19.0f), solarSample(t, 500.0f),
+              gpsSample(t, 1.0f));
+    helm.requestMode(Mode::kRange, t);
+    sh::HelmOutput out;
+    for (int i = 0; i < 100; ++i) {
+        t += 500;
+        // At the reserve, RANGE falls back to the charging-only power loop.
+        out = helm.step(t, 0.5f, battSample(t, 0.0f, 19.0f),
+                        solarSample(t, 500.0f), gpsSample(t, 1.0f));
+    }
+    CHECK((out.telemetry.fault_flags & sh::kFaultSocAtReserve) != 0);
+    CHECK(helm.mode() == Mode::kRange);
+    CHECK(out.motor_cmd_pct < 20.0f);
+}
+
+TEST(helm_arrival_requires_fresh_budget) {
+    ControlConfig cfg;
+    Helm helm(cfg, nullptr);
+    uint32_t t = 1000;
+    helm.step(t, 0.5f, battSample(t, 100.0f, 80.0f), solarSample(t, 500.0f),
+              gpsSample(t, 1.0f));
+    CHECK(!helm.requestMode(Mode::kArrival, t));  // no budget yet
+    helm.setArrivalBudget(-150.0f, t);
+    CHECK(!helm.requestMode(Mode::kArrival,
+                            t + cfg.remote_timeout_ms + 1));  // stale
+    helm.setArrivalBudget(-150.0f, t);
+    CHECK(helm.requestMode(Mode::kArrival, t + 100));
+    CHECK(helm.mode() == Mode::kArrival);
+    // Extreme wire values are clamped to the +/-5 kW envelope (both sides).
+    helm.setArrivalBudget(-9999.0f, t + 100);
+    helm.setArrivalBudget(9999.0f, t + 100);
+    CHECK(helm.mode() == Mode::kArrival);
+}
+
+TEST(helm_arrival_tracks_budget_and_degrades_when_stale) {
+    ControlConfig cfg;
+    cfg.filter_time_constant_s = 0.0f;
+    Helm helm(cfg, nullptr);
+    uint32_t t = 1000;
+    helm.step(t, 0.5f, battSample(t, -150.0f, 80.0f), solarSample(t, 300.0f),
+              gpsSample(t, 1.0f));
+    helm.setArrivalBudget(-150.0f, t);
+    helm.requestMode(Mode::kArrival, t);
+    sh::HelmOutput out;
+    for (int i = 0; i < 100; ++i) {
+        t += 500;
+        helm.setArrivalBudget(-150.0f, t);  // phone keeps streaming
+        // Battery already discharging exactly at the budget: the closed
+        // loop should hold rather than ramp away.
+        out = helm.step(t, 0.5f, battSample(t, -150.0f, 80.0f),
+                        solarSample(t, 300.0f), gpsSample(t, 1.0f));
+    }
+    CHECK(out.auto_active);
+    CHECK(out.telemetry.mode == static_cast<uint8_t>(Mode::kArrival));
+    // Phone goes silent: degrade to self-contained SOLAR with the fault.
+    t += cfg.remote_timeout_ms + 1000;
+    out = helm.step(t, 0.5f, battSample(t, -150.0f, 80.0f),
+                    solarSample(t, 300.0f), gpsSample(t, 1.0f));
+    CHECK(helm.mode() == Mode::kSolar);
+    CHECK(out.auto_active);
+    CHECK((out.telemetry.fault_flags & sh::kFaultArrivalStale) != 0);
+}
+
 TEST(helm_force_manual_from_auto) {
     ControlConfig cfg;
     Helm helm(cfg, nullptr);

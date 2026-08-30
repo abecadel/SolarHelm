@@ -154,6 +154,36 @@ std::vector<Scenario> buildScenarios() {
         s.events.push_back({900.0f, EventType::kFailShunt, 0.0f});
         list.push_back(s);
     }
+    {
+        Scenario s;
+        s.name = "RangeCruise";
+        s.description =
+            "RANGE holds the configured best-efficiency motor power all "
+            "leg, no phone attached; the reserve floor still applies";
+        s.duration_s = 5400.0f;
+        s.start_soc_pct = 70.0f;
+        s.auto_request_mode = sh::Mode::kRange;
+        s.solar.waveform = SolarWaveform::kConstant;
+        s.solar.peak_w = 350.0f;
+        list.push_back(s);
+    }
+    {
+        Scenario s;
+        s.name = "ArrivalBudget";
+        s.description =
+            "Phone streams a -150 W arrival battery budget, then goes "
+            "quiet mid-leg: SolarHelm degrades to SOLAR on its own";
+        s.duration_s = 3600.0f;
+        s.start_soc_pct = 80.0f;
+        s.solar.waveform = SolarWaveform::kConstant;
+        s.solar.peak_w = 300.0f;
+        // Budget first, then the mode request in the same tick (a fresh
+        // stream is required to enter ARRIVAL).
+        s.events.push_back({600.0f, EventType::kSetArrivalBudget, -150.0f});
+        s.events.push_back({600.0f, EventType::kRequestArrival, 0.0f});
+        s.events.push_back({1800.0f, EventType::kStopArrivalStream, 0.0f});
+        list.push_back(s);
+    }
     return list;
 }
 

@@ -148,9 +148,29 @@ void applyRemoteBody(const char* body, size_t len) {
     const sh::RemoteCommand cmd = sh::parseRemoteCommand(body, len);
     if (!cmd.valid) return;
     const uint32_t now_ms = millis();
-    g_helm.setRemoteTarget(cmd.target_w, now_ms);
-    if (g_auto_switch_stable && g_helm.mode() != sh::Mode::kRemote) {
-        g_helm.requestMode(sh::Mode::kRemote, now_ms);
+    if (cmd.has_target) {
+        g_helm.setRemoteTarget(cmd.target_w, now_ms);
+    }
+    if (cmd.has_arrival) {
+        g_helm.setArrivalBudget(cmd.arrival_battery_w, now_ms);
+    }
+    // Mode: an explicit "mode" key wins; a bare target/budget implies its
+    // mode (back-compat with the original {"target_w": N} contract).
+    sh::Mode want = g_helm.mode();
+    if (cmd.has_mode) {
+        want = cmd.mode;
+    } else if (cmd.has_target) {
+        want = sh::Mode::kRemote;
+    } else if (cmd.has_arrival) {
+        want = sh::Mode::kArrival;
+    }
+    if (want == g_helm.mode()) return;
+    if (want == sh::Mode::kManual) {
+        g_helm.forceManual("app_request", now_ms);
+    } else if (g_auto_switch_stable) {
+        // Auto modes still require the physical AUTO switch, like REMOTE
+        // always has.
+        g_helm.requestMode(want, now_ms);
     }
 }
 

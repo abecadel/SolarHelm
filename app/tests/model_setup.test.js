@@ -12,6 +12,7 @@ import {
   applyStoredProfile,
   curveToText,
   fillSetupForm,
+  fitRangePower,
   initSetup,
   parseCurveText,
   saveSetup,
@@ -265,6 +266,52 @@ test('boat config loads, edits and pushes over the SoftAP API', async () => {
   await fire(deps.doc, 'setup-boat-load', 'click');
   assert.ok(deps.doc.getElementById('setup-boat-status').textContent
       .includes('open the app from the boat'));
+});
+
+test('fitRangePower writes the learned best-efficiency power to the boat',
+     async () => {
+  const writes = [];
+  const deps = setupDeps();
+  deps.pageProtocol = 'http:';
+  deps.rawFetch = async (url, opts) => {
+    if (opts && opts.method === 'POST') {
+      writes.push(JSON.parse(opts.body));
+      return { ok: true, json: async () => ({ ok: true, fields: 1 }) };
+    }
+    return { ok: true, json: async () => ({}) };
+  };
+  const state = { profile: { ...PROFILE } };
+  initSetup(deps, state, PROFILE);
+  await fire(deps.doc, 'setup-range-fit', 'click');
+  assert.equal(writes.length, 1);
+  const powerW = writes[0].range_motor_power_w;
+  assert.ok(powerW > 50 && powerW < 1164, `power=${powerW}`);
+  assert.ok(deps.doc.getElementById('setup-boat-status').textContent
+      .includes(`RANGE power set to ${powerW} W`));
+
+  // No usable curve yet: guidance, no request.
+  const bare = setupDeps();
+  bare.pageProtocol = 'http:';
+  bare.rawFetch = async () => { throw new Error('must not be called'); };
+  await fitRangePower(bare, { profile: PROFILE,
+                              vessel: { curve: { b1: 0, b3: 0 },
+                                        hotelW: 0 } });
+  assert.ok(bare.doc.getElementById('setup-boat-status').textContent
+      .includes('no usable hull curve'));
+
+  // Boat refusal is surfaced.
+  const refuse = setupDeps();
+  refuse.pageProtocol = 'http:';
+  refuse.rawFetch = async (url, opts) =>
+      (opts && opts.method === 'POST'
+        ? { ok: false, status: 400,
+            json: async () => ({ ok: false, error: 'bad_range_power' }) }
+        : { ok: true, json: async () => ({}) });
+  refuse.doc.getElementById('setup-boat-url').value = 'http://192.168.4.1';
+  assert.equal(await fitRangePower(refuse, { profile: { ...PROFILE } }),
+               false);
+  assert.ok(refuse.doc.getElementById('setup-boat-status').textContent
+      .includes('bad_range_power'));
 });
 
 test('initSetup binds save and reset-to-default', () => {

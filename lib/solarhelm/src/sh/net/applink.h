@@ -17,6 +17,7 @@
 
 #include <cstddef>
 
+#include "sh/control/mode_manager.h"
 #include "sh/core/config.h"
 #include "sh/telemetry/telemetry.h"
 
@@ -25,19 +26,30 @@ namespace sh {
 // Upper bound accepted from the wire; generous vs any supported motor so
 // a garbage payload cannot masquerade as a huge valid target.
 constexpr float kRemoteTargetMaxW = 100000.0f;
+// ARRIVAL battery budgets accepted from the wire (either sign).
+constexpr float kArrivalBudgetMaxW = 5000.0f;
 
 // Serializes a telemetry record as one compact JSON object. snprintf-style
 // return: >= buf_len means the output was truncated (give it ~512 bytes).
 int writeTelemetryJson(const TelemetryRecord& r, char* buf, size_t buf_len);
 
 struct RemoteCommand {
-    bool valid = false;
+    bool valid = false;         // at least one directive, all well-formed
+    bool has_target = false;    // "target_w": REMOTE motor-power target
     float target_w = 0.0f;
+    bool has_arrival = false;   // "arrival_battery_w": ARRIVAL budget
+    float arrival_battery_w = 0.0f;
+    bool has_mode = false;      // "mode": explicit mode request
+    Mode mode = Mode::kSolar;
 };
 
-// Parses a phone request body like {"target_w": 350.5}. Whitespace-
-// tolerant, other keys ignored; valid only when the value is a finite
-// number in [0, kRemoteTargetMaxW].
+// Parses a phone request body carrying any of:
+//   "target_w"          motor-power target, finite in [0, kRemoteTargetMaxW]
+//   "arrival_battery_w" battery budget, finite in +/- kArrivalBudgetMaxW
+//   "mode"              "manual"|"solar"|"solar+"|"range"|"arrival"|"remote"
+// Whitespace-tolerant, unknown keys ignored. A present-but-malformed
+// directive invalidates the WHOLE command (never best-effort throttle
+// changes); a body with none of the keys is invalid.
 RemoteCommand parseRemoteCommand(const char* body, size_t len);
 
 // ---- Runtime-tunable configuration over the link ----
