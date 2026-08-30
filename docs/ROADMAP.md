@@ -61,8 +61,9 @@ tuning; RANGE mode implementation on the measured curve.
 - **Helios-driven items** (docs/case-studies/HELIOS_11_LESSONS.md):
   hull-count-aware vessel profile (mono/cat/tri + LWL/beam/spacing/bow
   fields, L2/L9); `config_revision` stamped into telemetry with
-  learning-state branching (L1); EnergyKnee + SolarEquilibriumSpeed in
-  the PWA UI (L5/L6); per-day energy ledger in the voyage summary (L7);
+  learning-state branching (L1); ~~EnergyKnee + SolarEquilibriumSpeed in
+  the PWA UI (L5/L6); per-day energy ledger in the voyage summary
+  (L7)~~ ✅ shipped in the app's Model/Voyage tabs;
   min-steerage-speed safety gate (L12); IMU roll/pitch telemetry (L8)
 - **SolarHelm Vessel Designer** (concept only, deliberately not
   started): offline multi-objective search over {length, slenderness,

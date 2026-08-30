@@ -26,6 +26,7 @@
 // docs/HARDWARE_TEST_PLAN.md and must pass there before Wave-2 ordering.
 
 #include <Arduino.h>
+#include <LittleFS.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <Wire.h>
@@ -207,6 +208,14 @@ void setup() {
     g_server.on("/telemetry", HTTP_GET, handleTelemetry);
     g_server.on("/remote", HTTP_POST, handleRemote);
     g_server.on("/remote", HTTP_OPTIONS, handleOptions);
+    // The companion app itself, served from flash so the phone needs
+    // nothing but this access point (tools/pack_fs.sh + uploadfs).
+    if (LittleFS.begin()) {
+        g_server.serveStatic("/", LittleFS, "/www/", "max-age=600");
+    } else {
+        Serial.println("WARN: LittleFS not mounted - app not served "
+                       "(run pack_fs.sh + uploadfs)");
+    }
     g_server.begin();
 
     esp_task_wdt_init(kWdtTimeoutS, true);

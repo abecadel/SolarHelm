@@ -68,6 +68,8 @@ page.on('console', (m) => {
 // Block the real forecast APIs: the app must fall back to clear-sky.
 await page.route('**/api.open-meteo.com/**', (r) => r.abort());
 await page.route('**/marine-api.open-meteo.com/**', (r) => r.abort());
+// Block OSM tiles: the map must initialize and stay editable without them.
+await page.route('**/tile.openstreetmap.org/**', (r) => r.abort());
 
 let failures = 0;
 const check = (cond, label) => {
@@ -92,8 +94,17 @@ const status = await page.textContent('#status');
 check(status.includes('clear-sky') || status.includes('Offline'),
       `offline fallback engaged (“${status.trim()}”)`);
 
-// --- Voyage planner (planner v2) ---
+// --- Voyage planner (planner v2, OSM map tab) ---
+await page.click('#tabbtn-voyage');
+const leafletUp = await page.evaluate(
+    () => !!window.L && document.querySelector('#map .leaflet-container,' +
+                                               '#map.leaflet-container') !== null);
+check(leafletUp, 'Leaflet map initializes on the Voyage tab');
 await page.fill('#waypoints', '43.5081, 16.4402, anchor\n43.5300, 16.4402');
+await page.dispatchEvent('#waypoints', 'change');
+const markerCount = await page.locator('#map path.leaflet-interactive')
+    .count();
+check(markerCount >= 2, `textarea waypoints appear on the map (${markerCount} shapes)`);
 await page.click('#voyage-plan');
 await page.waitForFunction(
     () => document.querySelector('#voyage-summary').innerHTML.length > 100,
@@ -106,10 +117,31 @@ const voyageStatus = await page.textContent('#voyage-status');
 check(voyageStatus.includes('wind'),
       `voyage environment status shown (“${voyageStatus.trim()}”)`);
 
+// --- Boat + Model + Setup tabs ---
+await page.click('#tabbtn-boat');
+check(await page.inputValue('#boat-url') === 'http://192.168.4.1',
+      'boat tab shows the SoftAP default address');
+await page.click('#tabbtn-model');
+const model = await page.innerHTML('#model-summary');
+check(model.includes('recommended cruise band') &&
+      model.includes('solar equilibrium'),
+      'model tab renders band, equilibrium and curve');
+await page.click('#tabbtn-setup');
+const setupPv = await page.inputValue('#setup-pv');
+check(parseFloat(setupPv) > 0, 'setup tab is filled from the profile');
+
 // --- Website landing page ---
 await page.goto(`${base}/index.html`);
-const h1 = await page.textContent('h1');
-check(h1.toLowerCase().includes('solarhelm'), 'site landing page renders');
+const landing = await page.content();
+check(landing.includes('SOLARHELM') && landing.includes('statband') &&
+      landing.includes('features.html'),
+      'site landing page renders nav, hero and stats band');
+await page.goto(`${base}/features.html`);
+const features = await page.content();
+check(features.includes('bench-pending') &&
+      features.includes('id="voyage"') &&
+      features.includes('Voyage planner'),
+      'features page renders with honest status tags');
 
 // --- Buying + installation guides ---
 await page.goto(`${base}/buying.html`);
@@ -139,7 +171,8 @@ check(cruiseKmh > 3 && cruiseKmh < 8,
       `calculator estimates a plausible solar cruise speed (${cruise.trim()} km/h)`);
 
 const unexpectedFailures =
-    failedUrls.filter((u) => !u.includes('api.open-meteo.com'));
+    failedUrls.filter((u) => !u.includes('api.open-meteo.com') &&
+                             !u.includes('tile.openstreetmap.org'));
 check(errors.length === 0,
       `no page errors (${errors.length ? errors.join(' | ') : 'clean'})`);
 check(unexpectedFailures.length === 0,

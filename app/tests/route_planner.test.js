@@ -8,6 +8,7 @@ import {
   bearingDeg,
   groundSpeedKmh,
   haversineKm,
+  planLedger,
   planVoyage,
   segmentRoute,
   solveStwKmh,
@@ -181,6 +182,24 @@ test('planVoyage: a geographic power penalty costs SOC or time', () => {
   assert.ok(penalized.summary.arrivalSocPct <= base.summary.arrivalSocPct);
   assert.ok(penalized.summary.arrivalTimeMs >= base.summary.arrivalTimeMs ||
             penalized.summary.arrivalSocPct < base.summary.arrivalSocPct);
+});
+
+test('planLedger buckets plan energy into a consistent daily ledger',
+     () => {
+  const dim = { ...CALM, ghiWm2: 300 };
+  const envAt = () => dim;
+  const r = planVoyage(VESSEL, ROUTE, envAt, DEPART, { windowH: 12 });
+  const ledger = planLedger(VESSEL, ROUTE, r.plan, envAt);
+  assert.ok(ledger.length >= 1);
+  const total = ledger.reduce((a, d) => a + d.distanceKm, 0);
+  assert.ok(Math.abs(total - r.summary.distanceKm) < 0.01);
+  for (const d of ledger) {
+    assert.ok(d.solarKwh >= 0);
+    assert.ok(d.hotelKwh > 0);
+    assert.ok(Math.abs(d.netKwh -
+                       (d.solarKwh - d.propKwh - d.hotelKwh)) < 1e-9);
+  }
+  assert.ok(ledger[0].propKwh > 0);
 });
 
 test('arrivalSocQuantiles brackets the nominal arrival SOC', () => {

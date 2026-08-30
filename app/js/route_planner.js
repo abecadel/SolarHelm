@@ -244,6 +244,39 @@ export function planVoyage(vessel, segments, envAt, departTime, options) {
   return { feasible: true, plan: steps, arrivalRow, summary };
 }
 
+/** Day-level energy ledger for a plan (docs/HELIOS_11_LESSONS.md L7:
+ *  "the day is the unit of energy"). Buckets plan steps into 24 h days
+ *  from departure; returns [{day, distanceKm, solarKwh, propKwh,
+ *  hotelKwh, netKwh}]. */
+export function planLedger(vessel, segments, plan, envAt,
+                           timeStepMin = 10) {
+  const stepH = timeStepMin / 60;
+  const profile = { pv_kwp: vessel.pvKwp, pv_derating: vessel.pvDerating };
+  const days = [];
+  for (const st of plan) {
+    const midH = ((st.tStart + st.tEnd) / 2) * stepH;
+    const day = Math.floor((st.tStart * stepH) / 24);
+    if (!days[day]) {
+      days[day] = { day: day + 1, distanceKm: 0, solarWh: 0, propWh: 0,
+                    hotelWh: 0 };
+    }
+    const durH = (st.tEnd - st.tStart) * stepH;
+    const env = envAt(Math.min(st.fromS, segments.length - 1), midH);
+    days[day].solarWh += pvPowerW(profile, env.ghiWm2) * durH;
+    days[day].propWh += st.powerW * durH;
+    days[day].hotelWh += vessel.hotelW * durH;
+    if (!st.wait) days[day].distanceKm += segments[st.fromS].lengthKm;
+  }
+  return days.filter(Boolean).map((d) => ({
+    day: d.day,
+    distanceKm: d.distanceKm,
+    solarKwh: d.solarWh / 1000,
+    propKwh: d.propWh / 1000,
+    hotelKwh: d.hotelWh / 1000,
+    netKwh: (d.solarWh - d.propWh - d.hotelWh) / 1000,
+  }));
+}
+
 /** Applies calibrated error quantiles to the nominal arrival SOC.
  *  Adverse case: propulsion consumes quantiles.p90 relative energy more
  *  than predicted; optimistic: p10 less. Bucketed durations are already

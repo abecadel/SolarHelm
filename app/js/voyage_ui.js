@@ -4,19 +4,17 @@
 // runs — and is covered — under node with a stub DOM.
 
 import { geoPowerFactor, loadGeoStore } from './geo_residuals.js';
+import { initMap, waypointsToText } from './map_ui.js';
 import { loadProviderStats } from './provider_stats.js';
 import { getRouteEnvironment } from './providers.js';
 import {
   arrivalSocQuantiles,
+  planLedger,
   planVoyage,
   segmentRoute,
 } from './route_planner.js';
 import { errorQuantiles, vesselFromProfile } from './vessel_model.js';
-import {
-  learnFromTelemetry,
-  loadVessel,
-  saveVessel,
-} from './vessel_store.js';
+import { loadVessel } from './vessel_store.js';
 import { assessPlan } from './voyage_safety.js';
 
 /** Parses the waypoint textarea: one "lat, lon[, anchor]" per line.
@@ -61,7 +59,20 @@ function gatesHtml(gates) {
       '</ul>';
 }
 
-export function voyageHtml(result, assessment, socQ) {
+function ledgerHtml(ledger) {
+  if (ledger.length === 0) return '';
+  const rows = ledger.map((d) =>
+      `<tr><td>Day ${d.day}</td><td>${d.distanceKm.toFixed(1)} km</td>` +
+      `<td>${d.solarKwh.toFixed(1)}</td><td>${d.propKwh.toFixed(1)}</td>` +
+      `<td>${d.hotelKwh.toFixed(1)}</td>` +
+      `<td>${d.netKwh >= 0 ? '+' : ''}${d.netKwh.toFixed(1)}</td></tr>`)
+      .join('');
+  return `<table class="days"><tr><th>energy [kWh]</th><th>distance</th>` +
+         `<th>solar</th><th>motor</th><th>hotel</th><th>net</th></tr>` +
+         `${rows}</table>`;
+}
+
+export function voyageHtml(result, assessment, socQ, ledger = []) {
   const head = `<div class="verdict ` +
       `${assessment.label === 'SAFE' ? 'ok' : 'warn'}">` +
       `${assessment.label}</div>`;
@@ -94,7 +105,8 @@ export function voyageHtml(result, assessment, socQ) {
       .join('');
   const table = `<table class="days"><tr><th>arrive by</th>` +
       `<th>best SOC</th></tr>${pareto}</table>`;
-  return head + cards + gatesHtml(assessment.gates) + table;
+  return head + cards + gatesHtml(assessment.gates) + ledgerHtml(ledger) +
+         table;
 }
 
 function readNum(doc, id, fallback) {
@@ -126,8 +138,10 @@ export async function runVoyage(deps, state) {
     reserveSocPct: readNum(doc, 'reserve', 25),
     segPowerFactor: (seg) => geoPowerFactor(geo, seg.lat, seg.lon),
   };
-  const result = planVoyage(vessel, segments, envAtFactory(env, departTime),
-                            departTime, opt);
+  const envAt = envAtFactory(env, departTime);
+  const result = planVoyage(vessel, segments, envAt, departTime, opt);
+  const ledger = result.feasible
+      ? planLedger(vessel, segments, result.plan, envAt) : [];
   const quantiles = errorQuantiles(vessel.relErrors);
   const socQ = result.feasible
       ? arrivalSocQuantiles(vessel, result.plan, result.summary, quantiles)
@@ -142,7 +156,7 @@ export async function runVoyage(deps, state) {
     reserveSocPct: opt.reserveSocPct,
   });
   doc.getElementById('voyage-summary').innerHTML =
-      voyageHtml(result, assessment, socQ);
+      voyageHtml(result, assessment, socQ, ledger);
   doc.getElementById('voyage-status').textContent =
       `Environment — wind: ${env.coverage.perVar.wind.label}, waves: ` +
       `${env.coverage.perVar.waves.label}, currents: ` +
@@ -150,47 +164,36 @@ export async function runVoyage(deps, state) {
   return { result, assessment, socQ, env };
 }
 
-/** Applies one telemetry log to the vessel model and reports the outcome
- *  in #voyage-learn-status. Exposed for tests; bound by initVoyage. */
-export function applyVoyageLearning(deps, state, csvText) {
-  const doc = deps.doc;
-  const vessel = state.vessel ?? vesselFromProfile(state.profile);
-  const out = learnFromTelemetry(vessel, csvText);
-  if (!out.ok) {
-    doc.getElementById('voyage-learn-status').textContent =
-        `Nothing learned: ${out.reason}`;
-    return false;
-  }
-  state.vessel = out.vessel;
-  saveVessel(deps.storage, out.vessel);
-  const r = out.report;
-  const driftNote = r.drift > 0
-      ? ' DRIFT: the boat needs more power than the model - check hull ' +
-        'fouling/prop.'
-      : r.drift < 0 ? ' Drift: the boat runs easier than modelled.' : '';
-  doc.getElementById('voyage-learn-status').textContent =
-      `Learned from ${r.blocks} steady blocks (voyage ` +
-      `#${out.vessel.voyages}). Curve P=${r.curve.b1.toFixed(1)}v+` +
-      `${r.curve.b3.toFixed(2)}v³; error p10..p90 ` +
-      `${(r.quantiles.p10 * 100).toFixed(0)}..` +
-      `${(r.quantiles.p90 * 100).toFixed(0)}%` +
-      `${r.quantiles.calibrated ? ' (calibrated)' : ''}.${driftNote}`;
-  return true;
-}
-
 export function initVoyage(deps, state) {
   const doc = deps.doc;
   state.vessel = loadVessel(deps.storage, state.profile);
+
+  // OSM route editor (when Leaflet is available): map edits write the
+  // textarea; textarea edits push back to the map. The textarea stays
+  // the source of truth the planner reads.
+  const mapCtl = initMap({
+    leaflet: deps.leaflet,
+    element: doc.getElementById('map'),
+    onChange: (wps) => {
+      doc.getElementById('waypoints').value = waypointsToText(wps);
+    },
+  });
+  state.mapCtl = mapCtl;
+  if (mapCtl.enabled) {
+    const syncFromText = () => {
+      const wps = parseWaypoints(doc.getElementById('waypoints').value);
+      if (wps) mapCtl.setWaypoints(wps);
+    };
+    doc.getElementById('waypoints').addEventListener('change',
+                                                     syncFromText);
+    syncFromText();
+  }
+
   doc.getElementById('voyage-plan').addEventListener('click', () => {
     doc.getElementById('voyage-status').textContent = 'Planning voyage…';
     return runVoyage(deps, state).catch((err) => {
       doc.getElementById('voyage-status').textContent =
           `Voyage planning failed: ${err}`;
     });
-  });
-  doc.getElementById('voyage-csv').addEventListener('change', async (ev) => {
-    const file = ev.target.files && ev.target.files[0];
-    if (!file) return;
-    applyVoyageLearning(deps, state, await file.text());
   });
 }

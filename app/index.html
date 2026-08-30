@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0b3d5c">
 <link rel="manifest" href="manifest.webmanifest">
-<title>SolarHelm Planner</title>
+<title>SolarHelm</title>
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <style>
   :root {
     --ink: #16283a; --paper: #f4f7f9; --card: #ffffff; --line: #d8e2ea;
@@ -14,9 +15,15 @@
   * { box-sizing: border-box; }
   body { margin: 0; font: 15px/1.45 system-ui, sans-serif; color: var(--ink);
          background: var(--paper); }
-  header { background: var(--accent); color: #fff; padding: 14px 16px; }
+  header { background: var(--accent); color: #fff; padding: 12px 16px 0; }
   header h1 { margin: 0; font-size: 1.15rem; letter-spacing: .04em; }
-  header p { margin: 2px 0 0; font-size: .8rem; opacity: .85; }
+  header p { margin: 2px 0 8px; font-size: .8rem; opacity: .85; }
+  .tabbar { display: flex; gap: 2px; overflow-x: auto; }
+  .tabbtn { background: rgba(255,255,255,.08); color: rgba(255,255,255,.85);
+            border: 0; border-radius: 8px 8px 0 0; padding: 9px 14px;
+            font: inherit; font-weight: 600; font-size: .85rem;
+            cursor: pointer; white-space: nowrap; }
+  .tabbtn.active { background: var(--paper); color: var(--accent); }
   main { max-width: 780px; margin: 0 auto; padding: 12px 12px 48px; }
   fieldset { border: 1px solid var(--line); border-radius: 10px;
              background: var(--card); margin: 0 0 12px; padding: 10px 12px; }
@@ -33,15 +40,16 @@
   ul.gates li { padding: 4px 8px; border-radius: 6px; margin-bottom: 4px; }
   ul.gates li.ok { background: #e2f2e8; color: var(--ok); }
   ul.gates li.warn { background: #fbe9dd; color: var(--warn); }
-  #voyage-plan { background: var(--accent); color: #fff; width: 100%;
-                 margin-top: 4px; }
-  #voyage-status { font-size: .8rem; color: #4a5c6b; min-height: 1.2em;
-                   margin: 8px 2px; }
   button { padding: 9px 16px; border: 0; border-radius: 8px; font: inherit;
            font-weight: 600; cursor: pointer; }
   #plan { background: var(--sun); color: #3a2800; width: 100%; margin-top: 4px; }
-  #locate { background: #e6edf2; color: var(--accent); }
-  #status { font-size: .8rem; color: #4a5c6b; min-height: 1.2em; margin: 8px 2px; }
+  #locate, #boat-export, #model-reset, #setup-reset {
+    background: #e6edf2; color: var(--accent); }
+  #voyage-plan, #boat-connect, #boat-send, #setup-save {
+    background: var(--accent); color: #fff; }
+  #voyage-plan { width: 100%; }
+  .statusline { font-size: .8rem; color: #4a5c6b; min-height: 1.2em;
+                margin: 8px 2px; }
   .verdict { padding: 10px 12px; border-radius: 8px; font-weight: 600;
              margin-bottom: 10px; }
   .verdict.ok { background: #e2f2e8; color: var(--ok); }
@@ -53,7 +61,8 @@
   .card b { display: block; font-size: 1.05rem; }
   .card span { font-size: .68rem; color: #62778a; }
   table.days { width: 100%; border-collapse: collapse; background: var(--card);
-               border: 1px solid var(--line); border-radius: 8px; font-size: .82rem; }
+               border: 1px solid var(--line); border-radius: 8px;
+               font-size: .82rem; margin-bottom: 10px; }
   table.days th, table.days td { padding: 5px 10px; text-align: right;
                                  border-top: 1px solid var(--line); }
   table.days th:first-child, table.days td:first-child { text-align: left; }
@@ -66,17 +75,27 @@
             margin-top: 6px; }
   .legend .swatch { display: inline-block; width: 10px; height: 10px;
                     border-radius: 2px; margin-right: 4px; }
-  #profile-name, #curve-status, #voyage-learn-status {
-    font-size: .75rem; color: #4a5c6b; }
+  #profile-name, #curve-status, .hint { font-size: .75rem; color: #4a5c6b; }
+  #map { height: 320px; border-radius: 10px; border: 1px solid var(--line);
+         margin-bottom: 10px; background: #dfe9f0; }
   footer { font-size: .7rem; color: #7d8fa0; margin-top: 24px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>SOLARHELM PLANNER</h1>
-  <p>Predict range, energy and SOC for a solar-electric cruise</p>
+  <h1>SOLARHELM</h1>
+  <p>The boat's own control panel — plan, watch, learn, configure</p>
+  <div class="tabbar">
+    <button id="tabbtn-plan" class="tabbtn active">Plan</button>
+    <button id="tabbtn-voyage" class="tabbtn">Voyage</button>
+    <button id="tabbtn-boat" class="tabbtn">Boat</button>
+    <button id="tabbtn-model" class="tabbtn">Model</button>
+    <button id="tabbtn-setup" class="tabbtn">Setup</button>
+  </div>
 </header>
 <main>
+
+<section id="tab-plan">
   <fieldset>
     <legend>Where &amp; when</legend>
     <div class="grid">
@@ -105,55 +124,125 @@
         <input id="cruise-start" type="number" min="0" max="23" value="6"></div>
       <div><label for="cruise-end">Cruise until [h UTC]</label>
         <input id="cruise-end" type="number" min="1" max="24" value="18"></div>
-    </div>
-  </fieldset>
-  <fieldset>
-    <legend>Battery</legend>
-    <div class="grid">
       <div><label for="soc">Start SOC [%]</label>
         <input id="soc" type="number" min="0" max="100" value="90"></div>
       <div><label for="reserve">Reserve SOC [%]</label>
         <input id="reserve" type="number" min="0" max="90" value="25"></div>
     </div>
   </fieldset>
-  <fieldset>
-    <legend>Boat</legend>
-    <p id="profile-name">loading profile…</p>
-    <label for="csv">Import telemetry CSV (learns your real Wh/km curve)</label>
-    <input id="csv" type="file" accept=".csv,text/csv">
-    <p id="curve-status"></p>
-  </fieldset>
+  <p id="profile-name">loading profile…</p>
+  <label for="csv" class="hint">Quick Wh/km curve import (telemetry CSV)</label>
+  <input id="csv" type="file" accept=".csv,text/csv">
+  <p id="curve-status"></p>
   <button id="plan">Plan trip</button>
-  <p id="status"></p>
+  <p id="status" class="statusline"></p>
   <section id="summary"></section>
   <section id="charts"></section>
+</section>
+
+<section id="tab-voyage" hidden>
+  <div id="map"></div>
+  <label for="waypoints" class="hint">Tap the map to add waypoints (first
+    one is your dock); click a marker to toggle <code>anchor</code>,
+    double-click to remove. Or edit here — one
+    <code>lat, lon[, anchor]</code> per line:</label>
+  <textarea id="waypoints" rows="3"
+    placeholder="43.5081, 16.4402, anchor&#10;43.3908, 16.2911"></textarea>
+  <div class="grid">
+    <div><label for="objective">Objective</label>
+      <select id="objective">
+        <option value="maxSoc">Arrive with max battery</option>
+        <option value="earliest">Arrive earliest (keeping reserve)</option>
+      </select></div>
+    <div><label>&nbsp;</label>
+      <button id="voyage-plan">Plan voyage</button></div>
+  </div>
+  <p id="voyage-status" class="statusline"></p>
+  <section id="voyage-summary"></section>
+</section>
+
+<section id="tab-boat" hidden>
   <fieldset>
-    <legend>Voyage A→B (waves, currents, departure window)</legend>
-    <label for="waypoints">Waypoints — one <code>lat, lon</code> per line;
-      append <code>, anchor</code> where you could stop and recharge</label>
-    <textarea id="waypoints" rows="4"
-      placeholder="43.5081, 16.4402, anchor&#10;43.3908, 16.2911"></textarea>
+    <legend>Boat link (ESP32 SoftAP)</legend>
     <div class="grid">
-      <div><label for="objective">Objective</label>
-        <select id="objective">
-          <option value="maxSoc">Arrive with max battery</option>
-          <option value="earliest">Arrive earliest (keeping reserve)</option>
-        </select></div>
-      <div><label>&nbsp;</label>
-        <button id="voyage-plan">Plan voyage</button></div>
+      <div><label for="boat-url">Boat address</label>
+        <input id="boat-url" type="text" value="http://192.168.4.1"></div>
+      <div><label>&nbsp;</label><button id="boat-connect">Connect</button></div>
     </div>
-    <label for="voyage-csv">Learn from a voyage log (telemetry CSV →
-      refits the hull model, calibrates uncertainty, checks drift)</label>
-    <input id="voyage-csv" type="file" accept=".csv,text/csv">
-    <p id="voyage-learn-status"></p>
-    <p id="voyage-status"></p>
-    <section id="voyage-summary"></section>
+    <p class="hint">Join the boat's <b>SolarHelm</b> Wi-Fi first. The app
+      itself can be served from this address — no internet needed on the
+      water.</p>
   </fieldset>
+  <p id="boat-status" class="statusline"></p>
+  <section id="boat-cards"></section>
+  <fieldset>
+    <legend>REMOTE mode target</legend>
+    <div class="grid">
+      <div><label for="boat-target">Motor power [W]</label>
+        <input id="boat-target" type="number" min="0" step="10" value="400"></div>
+      <div><label>&nbsp;</label><button id="boat-send">Send target</button></div>
+    </div>
+    <p id="boat-remote-status" class="hint"></p>
+  </fieldset>
+  <button id="boat-export">Export session log (CSV)</button>
+</section>
+
+<section id="tab-model" hidden>
+  <div class="grid">
+    <div><label for="model-pv">PV available now [W] (for equilibrium)</label>
+      <input id="model-pv" type="number" min="0" step="50" value="800"></div>
+  </div>
+  <section id="model-summary"></section>
+  <label for="model-csv" class="hint">Learn from a voyage log (telemetry
+    CSV → refit hull curve, calibrate uncertainty, check drift)</label>
+  <input id="model-csv" type="file" accept=".csv,text/csv">
+  <p id="model-learn-status" class="statusline"></p>
+  <button id="model-reset">Reset learned model &amp; stores</button>
+</section>
+
+<section id="tab-setup" hidden>
+  <fieldset>
+    <legend>Boat configuration</legend>
+    <p id="setup-revision" class="hint"></p>
+    <div class="grid">
+      <div><label for="setup-name">Boat name</label>
+        <input id="setup-name" type="text"></div>
+      <div><label for="setup-pv">PV array [kWp]</label>
+        <input id="setup-pv" type="number" step="0.1" min="0"></div>
+      <div><label for="setup-derating">PV derating (0..1]</label>
+        <input id="setup-derating" type="number" step="0.01" min="0" max="1"></div>
+      <div><label for="setup-battery">Battery [kWh]</label>
+        <input id="setup-battery" type="number" step="0.1" min="0"></div>
+      <div><label for="setup-hotel">Hotel load [W]</label>
+        <input id="setup-hotel" type="number" step="5" min="0"></div>
+      <div><label for="setup-motor">Motor max [W]</label>
+        <input id="setup-motor" type="number" step="10" min="0"></div>
+    </div>
+    <label for="setup-curve" class="hint">Hull curve — one
+      <code>km/h, Wh/km</code> per line (from sea trials or the Model
+      tab)</label>
+    <textarea id="setup-curve" rows="6"></textarea>
+    <label for="setup-note" class="hint">What changed? (stored with the
+      new revision)</label>
+    <input id="setup-note" type="text" placeholder="e.g. added second panel">
+    <div class="grid" style="margin-top:8px">
+      <div><button id="setup-save">Save (new revision)</button></div>
+      <div><button id="setup-reset">Reset to reference profile</button></div>
+    </div>
+    <p id="setup-status" class="statusline"></p>
+    <p class="hint">Boat-side config sync (NVS over the SoftAP API) arrives
+      with the bench milestone — until then this configuration lives in
+      this browser and drives all planning.</p>
+  </fieldset>
+</section>
+
   <footer>
-    SolarHelm Planner is advisory only — it never controls the boat.
-    Forecast: open-meteo.com (falls back to a clear-sky model offline).
+    SolarHelm is advisory on this screen — the C++ core on the boat is the
+    only control authority, and it degrades safely without this app.
+    Map data © OpenStreetMap contributors. Forecast: open-meteo.com.
   </footer>
 </main>
+<script src="vendor/leaflet/leaflet.js"></script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

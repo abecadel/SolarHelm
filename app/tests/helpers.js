@@ -46,8 +46,46 @@ export function makeStorage(initial = {}) {
   return {
     getItem: (k) => (map.has(k) ? map.get(k) : null),
     setItem: (k, v) => map.set(k, String(v)),
+    removeItem: (k) => map.delete(k),
     _map: map,
   };
+}
+
+/** A recording fake of the Leaflet surface map_ui.js uses. */
+export function makeLeaflet() {
+  const calls = { markers: [], lines: [], removed: [], views: [],
+                  tiles: [] };
+  const L = {
+    _calls: calls,
+    map(el, opts) {
+      calls.mapEl = el;
+      calls.mapOpts = opts;
+      calls.map = {
+        handlers: {},
+        on(ev, fn) { calls.map.handlers[ev] = fn; },
+        removeLayer(layer) { calls.removed.push(layer); },
+        setView(center, zoom) { calls.views.push([center, zoom]); },
+      };
+      return calls.map;
+    },
+    tileLayer(url, opts) {
+      calls.tiles.push({ url, opts });
+      return { addTo() { return this; } };
+    },
+    circleMarker(latlng, style) {
+      const mk = { latlng, style, handlers: {},
+                   on(ev, fn) { mk.handlers[ev] = fn; },
+                   addTo() { return mk; } };
+      calls.markers.push(mk);
+      return mk;
+    },
+    polyline(points, style) {
+      const pl = { points, style, addTo() { return pl; } };
+      calls.lines.push(pl);
+      return pl;
+    },
+  };
+  return L;
 }
 
 /** fetch stub returning a fixed JSON payload (or failing). */

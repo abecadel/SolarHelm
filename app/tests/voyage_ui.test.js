@@ -1,9 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { VESSEL_STORAGE_KEY } from '../js/vessel_store.js';
 import {
-  applyVoyageLearning,
   envAtFactory,
   initVoyage,
   parseWaypoints,
@@ -13,9 +11,9 @@ import {
 import {
   fire,
   makeDoc,
+  makeLeaflet,
   makeStorage,
   marinePayload,
-  telemetryCsv,
   windPayload,
 } from './helpers.js';
 
@@ -111,6 +109,7 @@ test('runVoyage plans a live-forecast voyage and renders the verdict',
   assert.ok(html.includes('arrival SOC'));
   assert.ok(html.includes('PASS'));
   assert.ok(html.includes('arrive by'));
+  assert.ok(html.includes('energy [kWh]')); // per-day ledger present
   assert.ok(deps.doc.getElementById('voyage-status').textContent
       .includes('wind: HIGH'));
 });
@@ -175,64 +174,37 @@ test('voyageHtml subsamples a long Pareto row', () => {
   assert.ok(html.includes('SAFE'));
 });
 
-test('applyVoyageLearning updates, persists and reports the vessel model',
+test('initVoyage seeds the vessel and syncs textarea and map both ways',
      () => {
-  const deps = voyageDeps();
-  const state = { profile: PROFILE };
-  const log = telemetryCsv([[4, 168], [4, 168], [5, 300], [6, 492],
-                            [7, 756]]);
-  assert.equal(applyVoyageLearning(deps, state, log), true);
-  assert.equal(state.vessel.voyages, 1);
-  assert.ok(deps.storage.getItem(VESSEL_STORAGE_KEY).includes('"curve"'));
-  const status = deps.doc.getElementById('voyage-learn-status').textContent;
-  assert.ok(status.includes('Learned from 4 steady blocks'));
-  // A drift-free log carries no drift warning.
-  assert.ok(!status.includes('DRIFT'));
-
-  // The next voyage plan uses the learned vessel, not the profile seed.
-  const bad = applyVoyageLearning(deps, state, 'garbage');
-  assert.equal(bad, false);
-  assert.ok(deps.doc.getElementById('voyage-learn-status').textContent
-      .includes('Nothing learned'));
-  assert.equal(state.vessel.voyages, 1); // untouched by the failed pass
-});
-
-test('applyVoyageLearning warns about drift in both directions', () => {
-  const deps = voyageDeps();
-  const state = { profile: PROFILE,
-                  vessel: { curve: { b1: 10, b3: 2 }, relErrors: [],
-                            voyages: 0 } };
-  applyVoyageLearning(deps, state, telemetryCsv(
-      [[4, 252], [4, 252], [5, 450], [6, 738], [7, 1134]]));
-  assert.ok(deps.doc.getElementById('voyage-learn-status').textContent
-      .includes('DRIFT'));
-  state.vessel = { curve: { b1: 10, b3: 2 }, relErrors: [], voyages: 0 };
-  applyVoyageLearning(deps, state, telemetryCsv(
-      [[4, 84], [4, 84], [5, 150], [6, 246], [7, 378]]));
-  assert.ok(deps.doc.getElementById('voyage-learn-status').textContent
-      .includes('runs easier'));
-});
-
-test('initVoyage loads the stored vessel and binds the CSV input',
-     async () => {
-  const deps = voyageDeps();
+  const L = makeLeaflet();
+  const deps = { ...voyageDeps(), leaflet: L };
   const state = { profile: PROFILE };
   initVoyage(deps, state);
   assert.ok(state.vessel.curve.b3 > 0); // seeded from the profile
-  const log = telemetryCsv([[4, 168], [4, 168], [5, 300], [6, 492],
-                            [7, 756]]);
-  await fire(deps.doc, 'voyage-csv', 'change',
-             { target: { files: [{ text: async () => log }] } });
-  assert.equal(state.vessel.voyages, 1);
-  // No file selected: a no-op.
-  await fire(deps.doc, 'voyage-csv', 'change', { target: { files: [] } });
-  assert.equal(state.vessel.voyages, 1);
+  assert.ok(state.mapCtl.enabled);
+  // The prefilled textarea was pushed onto the map at init.
+  assert.equal(state.mapCtl.getWaypoints().length, 3);
+  // A map edit rewrites the textarea.
+  L._calls.map.handlers.click({ latlng: { lat: 43.2, lon: 0,
+                                          lng: 16.2 } });
+  assert.ok(deps.doc.getElementById('waypoints').value
+      .includes('43.2000, 16.2000'));
+  // A textarea edit pushes back to the map; garbage is ignored.
+  deps.doc.getElementById('waypoints').value = '43.5, 16.4\n43.6, 16.4';
+  fire(deps.doc, 'waypoints', 'change');
+  assert.equal(state.mapCtl.getWaypoints().length, 2);
+  deps.doc.getElementById('waypoints').value = 'not, numbers';
+  fire(deps.doc, 'waypoints', 'change');
+  assert.equal(state.mapCtl.getWaypoints().length, 2); // unchanged
+});
 
-  // A fresh init on the same storage restores the learned model.
-  const deps2 = { ...voyageDeps(), storage: deps.storage };
-  const state2 = { profile: PROFILE };
-  initVoyage(deps2, state2);
-  assert.equal(state2.vessel.voyages, 1);
+test('initVoyage works without Leaflet (textarea-only fallback)', () => {
+  const deps = voyageDeps(); // no leaflet in deps
+  const state = { profile: PROFILE };
+  initVoyage(deps, state);
+  assert.equal(state.mapCtl.enabled, false);
+  assert.deepEqual(state.mapCtl.getWaypoints(), []);
+  state.mapCtl.setWaypoints([{ lat: 1, lon: 2 }]); // no-op, no throw
 });
 
 test('initVoyage binds the button; failures land in the status line',

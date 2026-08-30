@@ -98,7 +98,10 @@ script. *Accept:* meter voltage tracks the simulated surplus as in
 docs/SIMULATION_RESULTS.md; REMOTE mode accepts a target from a laptop
 via `POST /remote {"target_w": N}` on the ESP32's SoftAP HTTP API
 (`GET /telemetry` streams state back) and degrades to SOLAR 10 s after
-the stream stops.
+the stream stops. Flash the companion app into LittleFS first
+(`tools/pack_fs.sh` then `pio run -e esp32s3 -t uploadfs`) and verify
+the ESP32 serves it at `http://192.168.4.1/` — the phone's Boat tab must
+show live telemetry with no internet anywhere.
 **Milestone-2 exit:** A1–A7 green ⇒ order Wave 2.
 
 ### Phase B — Motor bench (Milestone 3)

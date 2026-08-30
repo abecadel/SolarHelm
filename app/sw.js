@@ -5,7 +5,7 @@
 // EXCLUDED from the unit-coverage gate (browser lifecycle code); exercised
 // by the headless-browser smoke test instead. Keep it logic-free.
 
-const CACHE = 'solarhelm-planner-v1';
+const CACHE = 'solarhelm-planner-v2';
 const SHELL = [
   './',
   './index.html',
@@ -18,6 +18,21 @@ const SHELL = [
   './js/energy_model.js',
   './js/charts.js',
   './js/profile.js',
+  './js/tabs.js',
+  './js/map_ui.js',
+  './js/boat_ui.js',
+  './js/model_ui.js',
+  './js/setup_ui.js',
+  './js/providers.js',
+  './js/route_planner.js',
+  './js/vessel_model.js',
+  './js/vessel_store.js',
+  './js/voyage_safety.js',
+  './js/voyage_ui.js',
+  './js/geo_residuals.js',
+  './js/provider_stats.js',
+  './vendor/leaflet/leaflet.js',
+  './vendor/leaflet/leaflet.css',
 ];
 
 self.addEventListener('install', (event) => {

@@ -59,6 +59,36 @@ export function hullSpeedKmh(curve, powerW) {
   return (lo + hi) / 2;
 }
 
+/** The recommended cruise band and its upper edge (the "EnergyKnee",
+ *  docs/case-studies/HELIOS_11_LESSONS.md L5). Whole-boat efficiency
+ *  f(v) = (P_hull(v) + hotelW)/v has a real minimum (going slower than
+ *  it wastes hotel energy per km); the knee is the fastest speed still
+ *  within `tolerance` of that minimum Wh/km. Returns
+ *  {bestKmh, kneeKmh, minWhKm}; zeros for an unlearned curve. */
+export function cruiseBandKmh(curve, hotelW = 0, tolerance = 0.25) {
+  if (curve.b1 === 0 && curve.b3 === 0) {
+    return { bestKmh: 0, kneeKmh: 0, minWhKm: 0 };
+  }
+  let bestV = 0.1;
+  let bestF = Infinity;
+  for (let v = 0.1; v <= 20; v += 0.05) {
+    const f = (hullPowerW(curve, v) + hotelW) / v;
+    if (f < bestF) {
+      bestF = f;
+      bestV = v;
+    }
+  }
+  let knee = bestV;
+  for (let v = bestV; v <= 20; v += 0.05) {
+    if ((hullPowerW(curve, v) + hotelW) / v <= bestF * (1 + tolerance)) {
+      knee = v;
+    } else {
+      break;
+    }
+  }
+  return { bestKmh: bestV, kneeKmh: knee, minWhKm: bestF };
+}
+
 /** PAVA isotonic regression cross-check: returns monotone fitted values
  *  for samples sorted by stwKmh (used to flag model inadequacy). */
 export function isotonicFit(values) {

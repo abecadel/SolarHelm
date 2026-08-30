@@ -124,10 +124,39 @@ gates, summary cards and the Pareto table.
   errors per provider/variable shade the static confidences feeding the
   coverage score, after 10+ comparisons.
 
+## The control-panel UX (current)
+
+The app is the boat's own control panel, served from GitHub Pages for
+armchair planning and **from the ESP32's flash over its SoftAP** for use
+on the water (`tools/pack_fs.sh` + `pio run -t uploadfs`;
+`firmware/main.cpp` serves `/www/` via LittleFS). Five hash-routed tabs
+(`js/tabs.js`), every view dependency-injected and unit-tested:
+
+- **Plan** — the original day planner: forecast (clear-sky offline),
+  hour-by-hour simulation, charts.
+- **Voyage** — the OpenStreetMap route editor (`js/map_ui.js`, vendored
+  Leaflet in `app/vendor/leaflet/` so no CDN is needed offline; tiles
+  gray out without internet but editing keeps working; the waypoint
+  textarea stays the synced source of truth). Verdict, six gates,
+  arrival-SOC quantiles, Pareto row, and the per-day energy ledger
+  (`planLedger`).
+- **Boat** — the live link (`js/boat_ui.js`): 1 Hz polling of
+  `GET /telemetry`, decoded fault flags, REMOTE power-target sender
+  (`POST /remote`), and a session recorder that exports the exact
+  firmware CSV format for the learner.
+- **Model** — everything learned (`js/model_ui.js`): hull curve,
+  recommended cruise band (EnergyKnee), solar-equilibrium speed,
+  calibration state, CUSUM drift, geo/provider store counts, the
+  learn-from-CSV input, and a reset.
+- **Setup** — initial configuration (`js/setup_ui.js`): profile editor
+  with `config_revision` bump + change note on every save, persisted
+  locally; boat-side NVS sync is bench-milestone work and the tab says
+  so.
+
 ## Next steps (see docs/ROADMAP.md)
 
-Live boat link: the ESP32 firmware now serves `GET /telemetry` and
-`POST /remote {"target_w": N}` on its SoftAP — the PWA's live-telemetry
-page and automatic log sync over that API are the next app-side work
-(hardware-gated: bench gate A7 validates the link). Later: H3 bins for
-the geo store, FES2022 offline tide packs, corridor-pack offline caching.
+Bench gate A7 validates the live link and the flash-served app
+physically. Then: boat-side NVS config sync (`/config` API), flash
+telemetry logging with GPS positions (which starts populating the
+geographic bias store and provider-skill stats), H3 bins for the geo
+store, FES2022 offline tide packs, corridor-pack offline caching.
