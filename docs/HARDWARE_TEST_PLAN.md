@@ -75,15 +75,22 @@ Scope on OUT0. Power the DAC with the ESP32 held in reset; power-cycle
 0→100→0 %. *Accept:* 0 % = 0.00 V ± 20 mV; 100 % = software ceiling
 (4.50 V ± 50 mV) never the 5 V rail; monotonic; I2C NACK (unplug SDA)
 drives `healthy()==false` and a logged fault within one tick.
-**A3 — VE.Direct live.** SmartShunt on bench PSU + dummy load, TX→ESP32
-RX (3.3 V!, GND common). *Accept:* valid blocks at ~1 Hz; V within
-±0.05 V of meter; sign correct (charge +/discharge −); pulling the wire
-forces MANUAL within `battery_timeout_ms` (3 s) and auto never
-self-resumes.
-**A4 — GNSS.** Configure NEO-M8N: 115200, 5 Hz, RMC+VTG(+GGA). Window/
-outdoor test. *Accept:* 5 Hz fixes; stationary SOG < 0.3 kn; walking
-speed plausible; antenna disconnect → `kFaultGpsStale` only, cruise
-logic unaffected.
+**A3 — VE.Direct live.** Dry-run first without the shunt: a USB-serial
+dongle (3.3 V TTL) on Serial1 fed by
+`tools/hil_replay.py --stream shunt --port /dev/ttyUSB0` proves the
+wiring and parser before real hardware. Then SmartShunt on bench PSU +
+dummy load, TX→ESP32 RX (3.3 V!, GND common). *Accept:* valid blocks at
+~1 Hz; V within ±0.05 V of meter; sign correct (charge +/discharge −);
+pulling the wire (or killing the replay) forces MANUAL within
+`battery_timeout_ms` (3 s) and auto never self-resumes.
+**A4 — GNSS.** Dry-run on Serial2 with
+`tools/hil_replay.py --stream gps --port /dev/ttyUSB1` (5 Hz RMC+VTG,
+1 Hz GGA at 115200 — the NEO-M8N's target config): telemetry must show
+the replayed position/speed, and `GPSFailure.csv` must raise
+`kFaultGpsStale` without touching cruise logic. Then configure the real
+NEO-M8N (115200, 5 Hz, RMC+VTG+GGA), window/outdoor test. *Accept:*
+5 Hz fixes; stationary SOG < 0.3 kn; walking speed plausible; antenna
+disconnect → `kFaultGpsStale` only, cruise logic unaffected.
 **A5 — MANUAL/AUTO relay logic.** Relay + heartbeat monostable on
 breadboard. *Accept:* relay NEVER energized without a live heartbeat
 (static GPIO high must NOT hold it — AC-coupling verified); ESP32 reset/
@@ -92,9 +99,13 @@ in both directions.
 **A6 — Watchdogs + brownout.** Enable task WDT; induce a deliberate hang;
 sag the 5 V rail. *Accept:* reboot lands in MANUAL, DAC at 0 V (A1
 behavior), event logged to flash.
-**A7 — HIL end-to-end.** Feed recorded/simulated VE.Direct frames while
-the DAC drives the meter; run SOLAR mode against a fake "battery power"
-script. *Accept:* meter voltage tracks the simulated surplus as in
+**A7 — HIL end-to-end.** Replay a full simulator day into both UARTs
+while the DAC drives the meter — two dongles, one scenario:
+`tools/hil_replay.py sim/out/CroatiaClearSummerDay.csv --stream shunt
+--port /dev/ttyUSB0` and the same CSV with `--stream gps --port
+/dev/ttyUSB1` (regenerate CSVs with `make scenarios`; `--rate 10` for a
+fast pass, `--selftest` if a frame looks suspect). Run SOLAR mode
+against the replayed battery power. *Accept:* meter voltage tracks the simulated surplus as in
 docs/SIMULATION_RESULTS.md; REMOTE mode accepts a target from a laptop
 via `POST /remote {"target_w": N}` on the ESP32's SoftAP HTTP API
 (`GET /telemetry` streams state back) and degrades to SOLAR 10 s after

@@ -116,6 +116,15 @@ check(voyage.includes('forecast-coverage'),
 const voyageStatus = await page.textContent('#voyage-status');
 check(voyageStatus.includes('wind'),
       `voyage environment status shown (“${voyageStatus.trim()}”)`);
+// Offline map tiles: with OSM blocked the cache line still renders from
+// a real IndexedDB store (0 tiles yet), proving the store opened.
+await page.waitForFunction(
+    () => /tiles cached/.test(
+        document.querySelector('#tile-status').textContent),
+    null, { timeout: 10000 });
+const tileStatus = await page.textContent('#tile-status');
+check(tileStatus.includes('tiles cached'),
+      `offline map cache line renders (“${tileStatus.trim()}”)`);
 
 // --- Boat + Model + Setup tabs ---
 await page.click('#tabbtn-boat');

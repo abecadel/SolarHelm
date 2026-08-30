@@ -4,7 +4,7 @@
 // runs — and is covered — under node with a stub DOM.
 
 import { geoPowerFactor, loadGeoStore } from './geo_residuals.js';
-import { initMap, waypointsToText } from './map_ui.js';
+import { initMap, prefetchRouteTiles, waypointsToText } from './map_ui.js';
 import { loadProviderStats } from './provider_stats.js';
 import { getRouteEnvironment } from './providers.js';
 import {
@@ -168,6 +168,41 @@ export async function runVoyage(deps, state) {
   return { result, assessment, socQ, env };
 }
 
+/** Renders the offline-map cache line ("N tiles cached" or guidance). */
+export async function refreshTileStatus(deps) {
+  const el = deps.doc.getElementById('tile-status');
+  if (!deps.tiles || !deps.tiles.store.available) {
+    el.textContent =
+        'Offline maps unavailable (no IndexedDB in this browser).';
+    return false;
+  }
+  el.textContent =
+      `${await deps.tiles.store.count()} tiles cached for offline use.`;
+  return true;
+}
+
+/** "Download maps for this route": prefetch the capped corridor. */
+export async function downloadRouteTiles(deps) {
+  const doc = deps.doc;
+  const status = doc.getElementById('tile-status');
+  if (!(await refreshTileStatus(deps))) return null;
+  const wps = parseWaypoints(doc.getElementById('waypoints').value);
+  if (!wps) {
+    status.textContent = 'Enter a route first, then download its maps.';
+    return null;
+  }
+  const r = await prefetchRouteTiles(deps.tiles, wps, (done, total) => {
+    status.textContent = `Downloading maps… ${done}/${total} tiles.`;
+  });
+  status.textContent =
+      `Map pack ready: ${r.fetched} downloaded, ` +
+      `${r.total - r.fetched - r.failed} already cached` +
+      (r.failed > 0 ? `, ${r.failed} failed` : '') +
+      (r.capped ? ' (capped at 200 tiles — coarse zooms first)' : '') +
+      '.';
+  return r;
+}
+
 export function initVoyage(deps, state) {
   const doc = deps.doc;
   state.vessel = loadVessel(deps.storage, state.profile);
@@ -192,6 +227,22 @@ export function initVoyage(deps, state) {
                                                      syncFromText);
     syncFromText();
   }
+
+  doc.getElementById('tile-download').addEventListener('click', () =>
+      downloadRouteTiles(deps).catch((err) => {
+        doc.getElementById('tile-status').textContent =
+            `Map download failed: ${err}`;
+      }));
+  doc.getElementById('tile-clear').addEventListener('click', async () => {
+    try {
+      if (deps.tiles) await deps.tiles.store.clear();
+      await refreshTileStatus(deps);
+    } catch (err) {
+      doc.getElementById('tile-status').textContent =
+          `Map cache unavailable: ${err}`;
+    }
+  });
+  refreshTileStatus(deps).catch(() => {}); // broken IndexedDB: line stays blank
 
   doc.getElementById('voyage-plan').addEventListener('click', () => {
     doc.getElementById('voyage-status').textContent = 'Planning voyage…';

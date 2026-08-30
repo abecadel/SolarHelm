@@ -56,9 +56,19 @@ export function makeStorage(initial = {}) {
 /** A recording fake of the Leaflet surface map_ui.js uses. */
 export function makeLeaflet() {
   const calls = { markers: [], lines: [], removed: [], views: [],
-                  tiles: [] };
+                  tiles: [], gridLayers: [] };
   const L = {
     _calls: calls,
+    GridLayer: {
+      extend(proto) {
+        return function Layer(opts) {
+          const inst = { ...proto, options: opts,
+                         addTo() { calls.gridLayers.push(inst);
+                                   return inst; } };
+          return inst;
+        };
+      },
+    },
     map(el, opts) {
       calls.mapEl = el;
       calls.mapOpts = opts;
@@ -88,6 +98,69 @@ export function makeLeaflet() {
     },
   };
   return L;
+}
+
+/** A fake IndexedDB factory covering the surface tile_store.js uses.
+ *  Requests resolve on a microtask, like the real (macrotask) API. */
+export function makeIndexedDb({ failOpen = false, failOps = false } = {}) {
+  const data = new Map();
+  const request = (run) => {
+    const r = { onsuccess: null, onerror: null, result: undefined,
+                error: null };
+    queueMicrotask(() => {
+      if (failOps) {
+        r.error = new Error('idb op failed');
+        if (r.onerror) r.onerror();
+        return;
+      }
+      r.result = run();
+      r.onsuccess();
+    });
+    return r;
+  };
+  const objectStore = {
+    get: (k) => request(() => data.get(k)),
+    put: (v, k) => request(() => { data.set(k, v); return k; }),
+    count: () => request(() => data.size),
+    clear: () => request(() => data.clear()),
+  };
+  return {
+    _data: data,
+    open() {
+      const r = { onupgradeneeded: null, onsuccess: null, onerror: null,
+                  error: null,
+                  result: { createObjectStore: () => objectStore,
+                            transaction: () => ({
+                              objectStore: () => objectStore }) } };
+      queueMicrotask(() => {
+        if (failOpen) {
+          r.error = null; // exercise the fallback Error in promisify
+          if (r.onerror) r.onerror();
+          return;
+        }
+        r.onupgradeneeded();
+        r.onsuccess();
+      });
+      return r;
+    },
+  };
+}
+
+/** The tiles dependency bundle map_ui/voyage_ui take, backed by fakes. */
+export function makeTiles(store, { fetchOk = true } = {}) {
+  const fetched = [];
+  return {
+    store,
+    fetchImpl: async (url) => {
+      fetched.push(url);
+      if (!fetchOk) return { ok: false, status: 503 };
+      return { ok: true, blob: async () => `blob:${url}` };
+    },
+    toUrl: (blob) => `url:${blob}`,
+    createElement: (tag) => ({ tag, src: '' }),
+    sleep: async () => {},
+    _fetched: fetched,
+  };
 }
 
 /** fetch stub returning a fixed JSON payload (or failing). */

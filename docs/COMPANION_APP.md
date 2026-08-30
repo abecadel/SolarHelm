@@ -167,9 +167,19 @@ freshness gate honestly. Telemetry now carries GPS positions, so a
 learned log also populates the geographic residual store
 (places where the boat needs more power than modelled).
 
+**Offline map tiles** (`js/tile_math.js`, `js/tile_store.js`): the map's
+base layer caches through IndexedDB — every tile viewed renders offline
+afterwards — and the Voyage tab's *Download maps for this route* button
+prefetches a one-tile-wide corridor around the route at zooms 8/10/12.
+The pack is hard-capped at **200 tiles per route, coarse zooms first**
+and fetched at under 2 requests/second, because OSM's tile usage policy
+forbids bulk scraping: a capped pack still shows the whole route at
+overview zooms and simply thins out at the detailed ones. Without
+IndexedDB (private mode) the map stays online-only and says so.
+
 ## Next steps (see docs/ROADMAP.md)
 
 Bench gate A7 validates both links (Wi-Fi and BLE), the flash-served
 app, and `/config` persistence physically. Then: provider-skill
 recording from live PV observations, H3 bins for the geo store, FES2022
-offline tide packs, corridor map-tile packs.
+offline tide packs.

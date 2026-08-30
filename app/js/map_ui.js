@@ -13,7 +13,10 @@
 // onChange, and edits to the textarea can be pushed back with
 // setWaypoints().
 
-export const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+import { corridorTiles, tileKey, tileUrl,
+         TILE_URL_TEMPLATE } from './tile_math.js';
+
+export const TILE_URL = TILE_URL_TEMPLATE;
 export const OSM_ATTRIBUTION =
     '&copy; <a href="https://www.openstreetmap.org/copyright">' +
     'OpenStreetMap</a> contributors';
@@ -25,6 +28,71 @@ const STYLE_PLAIN = { radius: 8, color: '#0b3d5c', fillColor: '#2778c4',
 const STYLE_ANCHOR = { radius: 9, color: '#7a5200', fillColor: '#e8a013',
                        fillOpacity: 0.95, weight: 2 };
 
+/**
+ * Resolves a tile to a renderable URL, caching through the tile store:
+ * cached blob -> object URL; otherwise fetch, best-effort store, render.
+ * tiles: {store, fetchImpl, toUrl, createElement}.
+ */
+export async function loadCachedTile(tiles, t) {
+  const cached = await tiles.store.get(tileKey(t));
+  if (cached) return tiles.toUrl(cached);
+  const resp = await tiles.fetchImpl(tileUrl(t));
+  if (!resp.ok) throw new Error(`tile HTTP ${resp.status}`);
+  const blob = await resp.blob();
+  await tiles.store.put(tileKey(t), blob);
+  return tiles.toUrl(blob);
+}
+
+/**
+ * The map's base layer: a cache-through OSM layer when the tile store is
+ * available (every tile the user views renders offline afterwards), the
+ * plain online tile layer otherwise.
+ */
+export function baseTileLayer(L, tiles) {
+  if (!tiles || !tiles.store.available || !L.GridLayer) {
+    return L.tileLayer(TILE_URL, { attribution: OSM_ATTRIBUTION,
+                                   maxZoom: 19 });
+  }
+  const Layer = L.GridLayer.extend({
+    createTile(coords, done) {
+      const img = tiles.createElement('img');
+      loadCachedTile(tiles, coords)
+          .then((url) => { img.src = url; done(null, img); },
+                (err) => done(err, img));
+      return img;
+    },
+  });
+  return new Layer({ attribution: OSM_ATTRIBUTION, maxZoom: 19 });
+}
+
+/**
+ * Prefetches the capped route corridor (tile_math.corridorTiles) at a
+ * polite rate. onProgress(done, total) fires per tile; sleep paces the
+ * network fetches (cached tiles are skipped without sleeping).
+ */
+export async function prefetchRouteTiles(tiles, wps, onProgress) {
+  const { tiles: list, capped } = corridorTiles(wps);
+  let fetched = 0;
+  let failed = 0;
+  let done = 0;
+  for (const t of list) {
+    if (!(await tiles.store.get(tileKey(t)))) {
+      try {
+        const resp = await tiles.fetchImpl(tileUrl(t));
+        if (!resp.ok) throw new Error(`tile HTTP ${resp.status}`);
+        await tiles.store.put(tileKey(t), await resp.blob());
+        fetched += 1;
+      } catch {
+        failed += 1;
+      }
+      await tiles.sleep(600); // OSM tile policy: stay under 2 req/s
+    }
+    done += 1;
+    onProgress(done, list.length);
+  }
+  return { total: list.length, fetched, failed, capped };
+}
+
 /** Serializes waypoints into the textarea format parseWaypoints reads. */
 export function waypointsToText(wps) {
   return wps.map((w) => `${w.lat.toFixed(4)}, ${w.lon.toFixed(4)}` +
@@ -32,7 +100,8 @@ export function waypointsToText(wps) {
 }
 
 /**
- * Builds the map controller. deps: {leaflet, element, onChange(wps)}.
+ * Builds the map controller. deps: {leaflet, element, onChange(wps)}
+ * plus an optional tiles bundle for offline caching (see baseTileLayer).
  * Returns {setWaypoints, getWaypoints, enabled} — enabled=false (and a
  * null controller surface that no-ops) when leaflet is unavailable.
  */
@@ -43,8 +112,7 @@ export function initMap(deps) {
   }
   const map = L.map(deps.element,
                     { center: DEFAULT_CENTER, zoom: DEFAULT_ZOOM });
-  L.tileLayer(TILE_URL, { attribution: OSM_ATTRIBUTION, maxZoom: 19 })
-      .addTo(map);
+  baseTileLayer(L, deps.tiles).addTo(map);
 
   const state = { wps: [], markers: [], line: null };
 

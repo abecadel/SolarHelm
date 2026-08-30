@@ -8,6 +8,7 @@ import { cachedFetch } from './net_cache.js';
 import { DEFAULT_PROFILE } from './profile.js';
 import { applyStoredProfile, initSetup } from './setup_ui.js';
 import { initTabs } from './tabs.js';
+import { browserTiles, openTileStore } from './tile_store.js';
 import { initApp } from './ui.js';
 import { initVoyage } from './voyage_ui.js';
 
@@ -37,7 +38,10 @@ const deps = {
   },
 };
 
-initApp(deps).then((state) => {
+openTileStore(window.indexedDB ?? null).then((store) => {
+  deps.tiles = browserTiles(store, rawFetch, window, document);
+  return initApp(deps);
+}).then((state) => {
   applyStoredProfile(deps, state);
   initVoyage(deps, state);
   initBoat(deps);

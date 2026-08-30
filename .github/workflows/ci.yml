@@ -17,6 +17,8 @@ jobs:
         run: pip install gcovr
       - name: Run coverage gate
         run: tools/check_coverage.sh
+      - name: HIL replay selftest (VE.Direct + NMEA frame generation)
+        run: python3 tools/hil_replay.py --selftest
       - name: Generate scenario plots
         run: |
           pip install matplotlib
