@@ -147,13 +147,17 @@ export async function runVoyage(deps, state) {
       ? arrivalSocQuantiles(vessel, result.plan, result.summary, quantiles)
       : { expectedPct: 0, conservativePct: 0, optimisticPct: 0,
           calibrated: quantiles.calibrated };
+  const moving = result.feasible
+      ? result.plan.filter((st) => !st.wait) : [];
   const assessment = assessPlan({
     feasible: result.feasible,
     coverage: env.coverage,
-    forecastAgeH: 0, // fetched just now
+    forecastAgeH: env.ageH ?? 0, // real cache age when offline
     currentDataPresent: env.sources.currents.confidence > 0,
     socQuantiles: socQ,
     reserveSocPct: opt.reserveSocPct,
+    minStwKmh: moving.length > 0
+        ? Math.min(...moving.map((st) => st.stwKmh)) : undefined,
   });
   doc.getElementById('voyage-summary').innerHTML =
       voyageHtml(result, assessment, socQ, ledger);

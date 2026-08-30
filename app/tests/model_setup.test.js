@@ -16,6 +16,7 @@ import {
   parseCurveText,
   saveSetup,
 } from '../js/setup_ui.js';
+import { GEO_STORAGE_KEY, loadGeoStore } from '../js/geo_residuals.js';
 import { cruiseBandKmh } from '../js/vessel_model.js';
 import { VESSEL_STORAGE_KEY } from '../js/vessel_store.js';
 import { fire, makeDoc, makeStorage, telemetryCsv } from './helpers.js';
@@ -89,6 +90,28 @@ test('applyModelLearning learns, persists, refreshes and reports drift',
       [[4, 84], [4, 84], [5, 150], [6, 246], [7, 378]]));
   assert.ok(deps.doc.getElementById('model-learn-status').textContent
       .includes('runs easier'));
+});
+
+test('applyModelLearning feeds positioned residuals into the geo store',
+     () => {
+  const deps = modelDeps();
+  const state = { profile: PROFILE };
+  const lines = ['timestamp_ms,speed_kmh,motor_estimated_power_w,' +
+                 'latitude_deg,longitude_deg'];
+  let t = 0;
+  const add = (v, p) => {
+    for (let s = 0; s < 90; s++) {
+      lines.push(`${t * 1000},${v},${p},43.51,16.41`);
+      t += 1;
+    }
+  };
+  add(4, 168); add(4, 168); add(5, 300); add(6, 492); add(7, 756);
+  assert.equal(applyModelLearning(deps, state, lines.join('\n')), true);
+  const geo = loadGeoStore(deps.storage);
+  assert.equal(Object.keys(geo.bins).length, 1); // all blocks in one bin
+  assert.ok(geo.bins[Object.keys(geo.bins)[0]].n >= 3);
+  assert.ok(deps.doc.getElementById('model-learn-status').textContent
+      .includes('positioned for the geo map'));
 });
 
 test('initModel binds CSV, PV input and reset', async () => {
@@ -187,6 +210,61 @@ test('applyStoredProfile overlays only a valid stored profile', () => {
   const throwing = { doc: makeDoc(), storage: {
     getItem() { throw new Error('blocked'); } } };
   assert.equal(applyStoredProfile(throwing, { profile: PROFILE }), false);
+});
+
+test('boat config loads, edits and pushes over the SoftAP API', async () => {
+  const calls = [];
+  const deps = setupDeps();
+  deps.pageProtocol = 'http:';
+  deps.rawFetch = async (url, opts) => {
+    calls.push({ url, opts });
+    if (opts && opts.method === 'POST') {
+      const body = JSON.parse(opts.body);
+      if (body.deadband_w < 0) {
+        return { ok: false, status: 400,
+                 json: async () => ({ ok: false,
+                                      error: 'kBadDeadband' }) };
+      }
+      return { ok: true, json: async () => ({ ok: true, fields: 1 }) };
+    }
+    return { ok: true, json: async () => ({ deadband_w: 25 }) };
+  };
+  const state = { profile: { ...PROFILE } };
+  initSetup(deps, state, PROFILE);
+  assert.equal(deps.doc.getElementById('setup-boat-url').value,
+               'http://192.168.4.1');
+
+  await fire(deps.doc, 'setup-boat-load', 'click');
+  assert.ok(deps.doc.getElementById('setup-boat-config').value
+      .includes('"deadband_w": 25'));
+  assert.equal(calls[0].url, 'http://192.168.4.1/config');
+
+  deps.doc.getElementById('setup-boat-config').value =
+      '{"deadband_w": 40}';
+  await fire(deps.doc, 'setup-boat-push', 'click');
+  assert.ok(deps.doc.getElementById('setup-boat-status').textContent
+      .includes('stored 1 field'));
+
+  // Boat-side validation refusal is surfaced verbatim.
+  deps.doc.getElementById('setup-boat-config').value =
+      '{"deadband_w": -1}';
+  await fire(deps.doc, 'setup-boat-push', 'click');
+  assert.ok(deps.doc.getElementById('setup-boat-status').textContent
+      .includes('kBadDeadband'));
+
+  // Garbage JSON never reaches the boat.
+  const before = calls.length;
+  deps.doc.getElementById('setup-boat-config').value = '{nope';
+  await fire(deps.doc, 'setup-boat-push', 'click');
+  assert.equal(calls.length, before);
+  assert.ok(deps.doc.getElementById('setup-boat-status').textContent
+      .includes('not valid JSON'));
+
+  // Mixed content: clear guidance, no request.
+  deps.pageProtocol = 'https:';
+  await fire(deps.doc, 'setup-boat-load', 'click');
+  assert.ok(deps.doc.getElementById('setup-boat-status').textContent
+      .includes('open the app from the boat'));
 });
 
 test('initSetup binds save and reset-to-default', () => {

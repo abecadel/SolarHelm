@@ -48,7 +48,7 @@ test('main.js boots the app against browser globals', async () => {
   const winListeners = {};
   globalThis.window = {
     localStorage: makeStorage(),
-    location: { hash: '' },
+    location: { hash: '', protocol: 'http:' },
     addEventListener: (ev, fn) => { winListeners[ev] = fn; },
   };
 

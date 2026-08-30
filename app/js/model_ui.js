@@ -3,7 +3,12 @@
 // equilibrium speed, calibration state, drift, and the stores collected
 // so far. The learn-from-CSV input lives here.
 
-import { GEO_STORAGE_KEY, loadGeoStore } from './geo_residuals.js';
+import {
+  GEO_STORAGE_KEY,
+  geoUpdate,
+  loadGeoStore,
+  saveGeoStore,
+} from './geo_residuals.js';
 import { PROVIDER_STATS_KEY, loadProviderStats } from './provider_stats.js';
 import {
   VESSEL_STORAGE_KEY,
@@ -93,9 +98,21 @@ export function applyModelLearning(deps, state, csvText) {
   }
   state.vessel = out.vessel;
   saveVessel(deps.storage, out.vessel);
+  // Positioned residuals feed the geographic bias store: places where
+  // this boat consistently needs more (or less) power than modelled.
+  if (out.report.positioned.length > 0) {
+    const geo = loadGeoStore(deps.storage);
+    for (const p of out.report.positioned) {
+      geoUpdate(geo, p.lat, p.lon, p.rel);
+    }
+    saveGeoStore(deps.storage, geo);
+  }
   doc.getElementById('model-learn-status').textContent =
       `Learned from ${out.report.blocks} steady blocks — voyage ` +
-      `#${out.vessel.voyages}.` +
+      `#${out.vessel.voyages}` +
+      (out.report.positioned.length > 0
+        ? ` (${out.report.positioned.length} positioned for the geo map).`
+        : '.') +
       (out.report.drift > 0
         ? ' DRIFT: the boat needs more power than modelled - check hull ' +
           'fouling/prop.'

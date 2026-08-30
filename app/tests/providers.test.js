@@ -144,6 +144,19 @@ test('getVoyageEnvironment merges live wind and marine data', async () => {
   assert.equal(env.hours[12].time.getUTCHours(), 12);
   assert.equal(env.coverage.perVar.wind.label, 'HIGH');
   assert.equal(env.coverage.overallLabel, 'HIGH');
+  assert.equal(env.ageH, 0); // live responses carry no cache age
+});
+
+test('getVoyageEnvironment reports the oldest cached payload age',
+     async () => {
+  const env = await getVoyageEnvironment(43.5, 16.4, START, 1,
+      async (url) => ({
+        ok: true,
+        cachedAgeH: url.includes('marine') ? 7.5 : 2.0,
+        json: async () => (url.includes('marine') ? marinePayload(1)
+                                                  : windPayload(1)),
+      }));
+  assert.ok(Math.abs(env.ageH - 7.5) < 1e-9);
 });
 
 test('getVoyageEnvironment degrades to clear-sky when both HTTP calls fail',

@@ -4,19 +4,26 @@
 
 import { initBoat } from './boat_ui.js';
 import { initModel, refreshModel } from './model_ui.js';
+import { cachedFetch } from './net_cache.js';
 import { DEFAULT_PROFILE } from './profile.js';
 import { applyStoredProfile, initSetup } from './setup_ui.js';
 import { initTabs } from './tabs.js';
 import { initApp } from './ui.js';
 import { initVoyage } from './voyage_ui.js';
 
+const rawFetch = (...args) => fetch(...args);
 const deps = {
   doc: document,
-  fetchImpl: (...args) => fetch(...args),
+  // Forecast/profile fetches go through the offline cache; the boat link
+  // uses rawFetch (stale telemetry is worse than none).
+  fetchImpl: cachedFetch(rawFetch, window.localStorage),
+  rawFetch,
   geolocation: navigator.geolocation,
   storage: window.localStorage,
   now: () => new Date(),
   leaflet: window.L ?? null,
+  bluetooth: navigator.bluetooth ?? null,
+  pageProtocol: window.location.protocol,
   getHash: () => window.location.hash,
   setHash: (t) => { window.location.hash = t; },
   onHashChange: (fn) => window.addEventListener('hashchange', fn),

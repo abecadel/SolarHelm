@@ -153,7 +153,18 @@ export function detectSteadyBlocks(rows, opts = {}) {
     const ok = meanP >= minPowerW && meanV > 1.0 && cvP <= maxPowerCv &&
                sdV <= maxSpeedSd;
     if (ok && !lastRejected) {
-      blocks.push({ stwKmh: meanV, powerW: meanP, n });
+      const block = { stwKmh: meanV, powerW: meanP, n };
+      if (typeof rows[start].lat === 'number') {
+        let sumLat = 0;
+        let sumLon = 0;
+        for (let i = start; i < end; i++) {
+          sumLat += rows[i].lat;
+          sumLon += rows[i].lon;
+        }
+        block.lat = sumLat / n;
+        block.lon = sumLon / n;
+      }
+      blocks.push(block);
     }
     lastRejected = !ok;
     start = end;

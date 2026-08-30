@@ -4,9 +4,11 @@
 // must know which boat produced which data), persists locally.
 // Boat-side NVS sync is bench-gated work; the tab says so honestly.
 
+import { httpLink, mixedContentBlocked } from './ble_link.js';
 import { profileValid } from './profile.js';
 
 export const PROFILE_STORAGE_KEY = 'solarhelm.profile.v1';
+export const DEFAULT_BOAT_URL = 'http://192.168.4.1';
 
 export function curveToText(curve) {
   return curve.map(([v, whkm]) => `${v}, ${whkm}`).join('\n');
@@ -108,11 +110,72 @@ export function applyStoredProfile(deps, state) {
   }
 }
 
+// ---- Boat-side control config over the SoftAP (/config API) ----
+// Wi-Fi only, by decision: initial configuration happens at the dock on
+// the boat's own network; a mixed-content page gets clear guidance.
+
+function boatConfigLink(deps) {
+  const doc = deps.doc;
+  const base = (doc.getElementById('setup-boat-url').value ||
+                DEFAULT_BOAT_URL).replace(/\/+$/, '');
+  if (mixedContentBlocked(deps.pageProtocol, base)) {
+    throw new Error('this HTTPS page cannot call the boat over plain ' +
+                    `HTTP - open the app from the boat at ${base}/ to ` +
+                    'configure it');
+  }
+  return httpLink(deps.rawFetch ?? deps.fetchImpl, base);
+}
+
+export async function loadBoatConfig(deps) {
+  const doc = deps.doc;
+  try {
+    const cfg = await boatConfigLink(deps).readConfig();
+    doc.getElementById('setup-boat-config').value =
+        JSON.stringify(cfg, null, 1);
+    doc.getElementById('setup-boat-status').textContent =
+        'Loaded the boat\'s current tunables. Edit and push; the boat ' +
+        'validates and persists them (NVS).';
+    return true;
+  } catch (err) {
+    doc.getElementById('setup-boat-status').textContent =
+        `Load failed: ${err && err.message ? err.message : err}`;
+    return false;
+  }
+}
+
+export async function pushBoatConfig(deps) {
+  const doc = deps.doc;
+  let patch = null;
+  try {
+    patch = JSON.parse(doc.getElementById('setup-boat-config').value);
+  } catch (err) {
+    doc.getElementById('setup-boat-status').textContent =
+        'That is not valid JSON.';
+    return false;
+  }
+  try {
+    const out = await boatConfigLink(deps).writeConfig(patch);
+    doc.getElementById('setup-boat-status').textContent =
+        `Boat accepted and stored ${out.fields} field(s).`;
+    return true;
+  } catch (err) {
+    doc.getElementById('setup-boat-status').textContent =
+        `Boat refused the config: ${err && err.message ? err.message
+                                                       : err}`;
+    return false;
+  }
+}
+
 export function initSetup(deps, state, defaults) {
   const doc = deps.doc;
   fillSetupForm(doc, state.profile);
   doc.getElementById('setup-save').addEventListener('click',
       () => saveSetup(deps, state));
+  doc.getElementById('setup-boat-url').value = DEFAULT_BOAT_URL;
+  doc.getElementById('setup-boat-load').addEventListener('click',
+      () => loadBoatConfig(deps));
+  doc.getElementById('setup-boat-push').addEventListener('click',
+      () => pushBoatConfig(deps));
   doc.getElementById('setup-reset').addEventListener('click', () => {
     state.profile = { ...defaults };
     try {

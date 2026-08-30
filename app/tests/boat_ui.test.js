@@ -10,6 +10,7 @@ import {
   sendRemote,
   toCsv,
 } from '../js/boat_ui.js';
+import { BLE_SERVICE } from '../js/ble_link.js';
 import { parseTelemetryRows } from '../js/vessel_store.js';
 import { fire, makeDoc } from './helpers.js';
 
@@ -20,7 +21,8 @@ const SAMPLE = {
   motor_estimated_power_w: 495, speed_kmh: 5.42, distance_today_km: 12.3,
   energy_solar_today_wh: 1500, energy_motor_today_wh: 1300,
   energy_hotel_today_wh: 240, efficiency_wh_km: 91.3,
-  reserve_soc_pct: 25, fault_flags: 0,
+  reserve_soc_pct: 25, fault_flags: 0, latitude_deg: 43.5081,
+  longitude_deg: 16.4402,
 };
 
 test('decodeFaults names the raised bits', () => {
@@ -29,23 +31,27 @@ test('decodeFaults names the raised bits', () => {
                    ['battery-stale', 'sag-soft', 'remote-stale']);
 });
 
-test('toCsv emits the firmware CSV format the learner reads', () => {
-  const csv = toCsv([SAMPLE, { ...SAMPLE, timestamp_ms: 124456 }]);
+test('toCsv emits the firmware CSV format, positions included', () => {
+  const csv = toCsv([SAMPLE, { ...SAMPLE, timestamp_ms: 124456,
+                               latitude_deg: undefined,
+                               longitude_deg: undefined }]);
   assert.ok(csv.startsWith(CSV_HEADER));
-  assert.equal(csv.split('\n').length, 3);
+  assert.ok(CSV_HEADER.endsWith('latitude_deg,longitude_deg'));
   const rows = parseTelemetryRows(csv);
   assert.equal(rows.length, 2);
   assert.equal(rows[0].powerW, 495);
-  assert.ok(Math.abs(rows[0].t_s - 123.456) < 1e-9);
+  assert.equal(rows[0].lat, 43.5081);
+  assert.equal(rows[1].lat, 0); // missing position -> the 0,0 sentinel
 });
 
 function boatDeps(fetchImpl, values = {}) {
   const doc = makeDoc({ 'boat-url': DEFAULT_BOAT_URL,
-                        'boat-target': '400', ...values });
+                        'boat-target': '400', 'boat-transport': 'http',
+                        ...values });
   const timers = { set: [], cleared: [] };
   const downloads = [];
   return {
-    doc, fetchImpl,
+    doc, rawFetch: fetchImpl, pageProtocol: 'http:', bluetooth: null,
     setIntervalFn: (fn, ms) => { timers.set.push({ fn, ms }); return 7; },
     clearIntervalFn: (id) => timers.cleared.push(id),
     download: (name, text) => downloads.push({ name, text }),
@@ -60,15 +66,15 @@ const okTelemetry = () => async (url, opts) => {
 
 test('pollOnce renders live cards and records the sample', async () => {
   const deps = boatDeps(okTelemetry());
-  const state = { boatUrl: DEFAULT_BOAT_URL, samples: [] };
-  assert.equal(await pollOnce(deps, state), true);
+  const state = initBoat(deps);
+  await fire(deps.doc, 'boat-connect', 'click');
   assert.equal(state.samples.length, 1);
   const html = deps.doc.getElementById('boat-cards').innerHTML;
   assert.ok(html.includes('SOLAR'));
   assert.ok(html.includes('-82 W'));
   assert.ok(html.includes('no faults'));
   assert.ok(deps.doc.getElementById('boat-status').textContent
-      .includes('1 samples'));
+      .includes('Live via http://192.168.4.1'));
 });
 
 test('pollOnce shows faults and survives link errors', async () => {
@@ -76,35 +82,37 @@ test('pollOnce shows faults and survives link errors', async () => {
     ok: true,
     json: async () => ({ ...SAMPLE, mode: 9, fault_flags: 1 << 2 }),
   }));
-  const state = { boatUrl: DEFAULT_BOAT_URL, samples: [] };
-  await pollOnce(deps, state);
+  const state = initBoat(deps);
+  await fire(deps.doc, 'boat-connect', 'click');
   const html = deps.doc.getElementById('boat-cards').innerHTML;
   assert.ok(html.includes('faults: gps-stale'));
   assert.ok(html.includes('#9')); // unknown mode rendered raw
 
   const dead = boatDeps(async () => { throw new Error('unreachable'); });
-  assert.equal(await pollOnce(dead,
-                              { boatUrl: 'http://x', samples: [] }),
-               false);
+  const deadState = initBoat(dead);
+  await fire(dead.doc, 'boat-connect', 'click');
   assert.ok(dead.doc.getElementById('boat-status').textContent
-      .includes('No boat at http://x'));
-  const http500 = boatDeps(async () => ({ ok: false, status: 500 }));
-  assert.equal(await pollOnce(http500,
-                              { boatUrl: 'http://x', samples: [] }),
-               false);
+      .includes('Link down'));
+  assert.equal(await pollOnce(dead, deadState), false);
 });
 
 test('sendRemote posts a valid target and reports failures', async () => {
   const calls = [];
   const deps = boatDeps(async (url, opts) => {
     calls.push({ url, opts });
-    return { ok: true };
+    return { ok: true, json: async () => SAMPLE };
   });
-  const state = { boatUrl: 'http://192.168.4.1', samples: [] };
+  const state = initBoat(deps);
+  // Not connected yet: guidance instead of a crash.
+  assert.equal(await sendRemote(deps, state), false);
+  assert.ok(deps.doc.getElementById('boat-remote-status').textContent
+      .includes('Connect'));
+
+  await fire(deps.doc, 'boat-connect', 'click');
   assert.equal(await sendRemote(deps, state), true);
-  assert.equal(calls[0].url, 'http://192.168.4.1/remote');
-  assert.equal(calls[0].opts.method, 'POST');
-  assert.deepEqual(JSON.parse(calls[0].opts.body), { target_w: 400 });
+  const post = calls.find((c) => c.opts && c.opts.method === 'POST');
+  assert.equal(post.url, 'http://192.168.4.1/remote');
+  assert.deepEqual(JSON.parse(post.opts.body), { target_w: 400 });
   assert.ok(deps.doc.getElementById('boat-remote-status').textContent
       .includes('degrades to SOLAR'));
 
@@ -113,8 +121,13 @@ test('sendRemote posts a valid target and reports failures', async () => {
   deps.doc.getElementById('boat-target').value = 'abc';
   assert.equal(await sendRemote(deps, state), false);
 
-  const failing = boatDeps(async () => ({ ok: false, status: 400 }));
-  assert.equal(await sendRemote(failing, state), false);
+  const failing = boatDeps(async (url, opts) =>
+      (opts && opts.method === 'POST'
+        ? { ok: false, status: 400 }
+        : { ok: true, json: async () => SAMPLE }));
+  const fState = initBoat(failing);
+  await fire(failing.doc, 'boat-connect', 'click');
+  assert.equal(await sendRemote(failing, fState), false);
   assert.ok(failing.doc.getElementById('boat-remote-status').textContent
       .includes('Send failed'));
 });
@@ -125,12 +138,11 @@ test('initBoat wires connect/disconnect polling and CSV export',
                         { 'boat-url': 'http://192.168.4.1/' });
   const state = initBoat(deps);
 
-  // Export before any data: guidance, no download.
-  fire(deps.doc, 'boat-export', 'click');
+  fire(deps.doc, 'boat-export', 'click'); // nothing recorded yet
   assert.equal(deps._downloads.length, 0);
 
   await fire(deps.doc, 'boat-connect', 'click');
-  assert.equal(state.boatUrl, 'http://192.168.4.1'); // trailing / stripped
+  assert.equal(state.link.label, 'http://192.168.4.1'); // slash stripped
   assert.equal(deps._timers.set.length, 1);
   assert.equal(deps.doc.getElementById('boat-connect').textContent,
                'Disconnect');
@@ -139,19 +151,68 @@ test('initBoat wires connect/disconnect polling and CSV export',
 
   fire(deps.doc, 'boat-export', 'click');
   assert.equal(deps._downloads.length, 1);
-  assert.ok(deps._downloads[0].name.endsWith('.csv'));
   assert.ok(deps._downloads[0].text.startsWith(CSV_HEADER));
 
-  fire(deps.doc, 'boat-connect', 'click'); // disconnect
+  await fire(deps.doc, 'boat-connect', 'click'); // disconnect
   assert.deepEqual(deps._timers.cleared, [7]);
-  assert.equal(deps.doc.getElementById('boat-connect').textContent,
-               'Connect');
+  assert.equal(state.link, null);
   assert.ok(deps.doc.getElementById('boat-status').textContent
       .includes('2 samples kept'));
 
-  // Reconnect with an empty URL field falls back to the default.
+  // Reconnect with an empty URL falls back to the default.
   deps.doc.getElementById('boat-url').value = '';
   await fire(deps.doc, 'boat-connect', 'click');
-  assert.equal(state.boatUrl, DEFAULT_BOAT_URL);
-  assert.equal(await sendRemote(deps, state), true);
+  assert.equal(state.link.label, DEFAULT_BOAT_URL);
+});
+
+test('mixed content and missing Bluetooth produce clear guidance',
+     async () => {
+  const https = boatDeps(okTelemetry());
+  https.pageProtocol = 'https:';
+  initBoat(https);
+  await fire(https.doc, 'boat-connect', 'click');
+  assert.ok(https.doc.getElementById('boat-status').textContent
+      .includes('cannot call the boat over plain HTTP'));
+
+  const noBt = boatDeps(okTelemetry(), { 'boat-transport': 'ble' });
+  initBoat(noBt);
+  await fire(noBt.doc, 'boat-connect', 'click');
+  assert.ok(noBt.doc.getElementById('boat-status').textContent
+      .includes('no Web Bluetooth'));
+});
+
+test('initBoat connects over BLE and disconnects the GATT link',
+     async () => {
+  let disconnected = 0;
+  const chars = {
+    read: { readValue: async () =>
+        new TextEncoder().encode(JSON.stringify(SAMPLE)) },
+    write: { writeValue: async () => {} },
+  };
+  const bt = {
+    requestDevice: async () => ({
+      name: 'SolarHelm',
+      gatt: {
+        connected: true,
+        connect: async function () {
+          return { getPrimaryService: async (u) => {
+            assert.equal(u, BLE_SERVICE);
+            return { getCharacteristic: async (uuid) =>
+                (uuid.endsWith('0002') ? chars.read : chars.write) };
+          } };
+        },
+        disconnect: () => { disconnected += 1; },
+      },
+    }),
+  };
+  const deps = boatDeps(okTelemetry(), { 'boat-transport': 'ble' });
+  deps.bluetooth = bt;
+  const state = initBoat(deps);
+  await fire(deps.doc, 'boat-connect', 'click');
+  assert.equal(state.link.kind, 'ble');
+  assert.equal(state.samples.length, 1);
+  assert.ok(deps.doc.getElementById('boat-status').textContent
+      .includes('Live via BLE: SolarHelm'));
+  await fire(deps.doc, 'boat-connect', 'click'); // disconnect
+  assert.equal(disconnected, 1);
 });

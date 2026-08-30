@@ -172,10 +172,12 @@ export async function getVoyageEnvironment(latDeg, lonDeg, startDate, days,
     windWaveHsM: 0, currentMs: 0, currentDirDeg: 0,
   }));
 
+  let ageH = 0; // oldest cached payload used (0 = live or clear-sky only)
   try {
     const resp = await fetchImpl(buildWindUrl(latDeg, lonDeg, startDate, days));
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const wind = parseWind(await resp.json());
+    ageH = Math.max(ageH, resp.cachedAgeH ?? 0);
     for (let i = 0; i < base.length && i < wind.length; i++) {
       Object.assign(base[i], wind[i]);
     }
@@ -192,6 +194,7 @@ export async function getVoyageEnvironment(latDeg, lonDeg, startDate, days,
         buildMarineUrl(latDeg, lonDeg, startDate, days));
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const marine = parseMarine(await resp.json());
+    ageH = Math.max(ageH, resp.cachedAgeH ?? 0);
     for (let i = 0; i < base.length && i < marine.length; i++) {
       const { time, ...vars } = marine[i];
       Object.assign(base[i], vars);
@@ -213,7 +216,7 @@ export async function getVoyageEnvironment(latDeg, lonDeg, startDate, days,
       }
     }
   }
-  return { hours: base, sources, coverage: coverageScore(sources) };
+  return { hours: base, sources, coverage: coverageScore(sources), ageH };
 }
 
 /**
@@ -284,7 +287,9 @@ export async function getRouteEnvironment(segments, startDate, days,
     }
     sources[key] = worst;
   }
-  return { envs, segToPoint, sources, coverage: coverageScore(sources) };
+  const ageH = Math.max(...envs.map((e) => e.ageH ?? 0));
+  return { envs, segToPoint, sources, coverage: coverageScore(sources),
+           ageH };
 }
 
 /** Per-variable and overall coverage score. Safety-critical variables

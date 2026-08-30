@@ -26,8 +26,15 @@ website with feasibility calculator, CI + Pages deployment.
   kill-sense, toggling relay heartbeat, task watchdog, SoftAP HTTP API.
   Compile-verified in CI; **physically untested — bench gates A1–A7 in
   docs/HARDWARE_TEST_PLAN.md are the acceptance tests.**
-- Remaining in M2: persisted, versioned config in NVS + validation on
-  load; power-on-zero verified with a meter (gate A1).
+- ✅ Persisted tunable config: `GET/POST /config` (whitelisted fields,
+  core-validated, NVS-stored; envelope thresholds deliberately not
+  remotely writable) + BLE GATT link (telemetry read / remote write)
+  for the HTTPS-served app — both compile-verified, bench-validated at
+  gate A7.
+- ✅ GPS position in every telemetry record → positioned logs populate
+  the geographic residual store through the app's learner.
+- Remaining in M2: power-on-zero verified with a meter (gate A1);
+  Wi-Fi+BLE runtime coexistence tuning.
 - Target: SolarHelm driving a multimeter from live simulated/replayed
   shunt data. **No propulsion connected.**
 
@@ -63,8 +70,8 @@ tuning; RANGE mode implementation on the measured curve.
   fields, L2/L9); `config_revision` stamped into telemetry with
   learning-state branching (L1); ~~EnergyKnee + SolarEquilibriumSpeed in
   the PWA UI (L5/L6); per-day energy ledger in the voyage summary
-  (L7)~~ ✅ shipped in the app's Model/Voyage tabs;
-  min-steerage-speed safety gate (L12); IMU roll/pitch telemetry (L8)
+  (L7); min-steerage-speed safety gate (L12)~~ ✅ shipped in the app;
+  IMU roll/pitch telemetry (L8)
 - **SolarHelm Vessel Designer** (concept only, deliberately not
   started): offline multi-objective search over {length, slenderness,
   displacement, PV, battery, motor, speed} maximizing daily autonomous

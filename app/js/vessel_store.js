@@ -28,6 +28,8 @@ export function parseTelemetryRows(csvText) {
   const iT = header.indexOf('timestamp_ms');
   const iSpeed = header.indexOf('speed_kmh');
   const iMotor = header.indexOf('motor_estimated_power_w');
+  const iLat = header.indexOf('latitude_deg');
+  const iLon = header.indexOf('longitude_deg');
   if (iT < 0 || iSpeed < 0 || iMotor < 0) return null;
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
@@ -37,7 +39,16 @@ export function parseTelemetryRows(csvText) {
     const p = parseFloat(c[iMotor]);
     if (!Number.isFinite(t) || !Number.isFinite(v) ||
         !Number.isFinite(p)) continue;
-    rows.push({ t_s: t / 1000, speedKmh: v, powerW: p });
+    const row = { t_s: t / 1000, speedKmh: v, powerW: p };
+    if (iLat >= 0 && iLon >= 0) {
+      const lat = parseFloat(c[iLat]);
+      const lon = parseFloat(c[iLon]);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        row.lat = lat;
+        row.lon = lon;
+      }
+    }
+    rows.push(row);
   }
   return rows.length > 0 ? rows : null;
 }
@@ -66,6 +77,7 @@ export function learnFromTelemetry(vessel, csvText, opts = {}) {
   // prediction-vs-actual), then refit including the new evidence.
   const relErrors = vessel.relErrors.slice();
   const cusum = new CusumDrift();
+  const positioned = []; // residuals with a fix: geographic learning food
   let drift = 0;
   for (const b of blocks) {
     const pred = hullPowerW(vessel.curve, b.stwKmh);
@@ -73,6 +85,10 @@ export function learnFromTelemetry(vessel, csvText, opts = {}) {
       const rel = (b.powerW - pred) / pred;
       relErrors.push(rel);
       drift = cusum.update(rel);
+      // (0,0) is the no-fix sentinel the firmware writes without GPS.
+      if (typeof b.lat === 'number' && (b.lat !== 0 || b.lon !== 0)) {
+        positioned.push({ lat: b.lat, lon: b.lon, rel });
+      }
     }
   }
   while (relErrors.length > MAX_REL_ERRORS) relErrors.shift();
@@ -83,7 +99,8 @@ export function learnFromTelemetry(vessel, csvText, opts = {}) {
   const next = { ...vessel, curve, relErrors,
                  voyages: vessel.voyages + 1 };
   return { ok: true, vessel: next,
-           report: { blocks: blocks.length, drift, quantiles, curve } };
+           report: { blocks: blocks.length, drift, quantiles, curve,
+                     positioned } };
 }
 
 export function saveVessel(storage, vessel) {

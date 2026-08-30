@@ -7,26 +7,30 @@
 <meta name="description" content="SolarHelm holds battery power instead of speed, so a solar-electric boat cruises on exactly the energy the sun provides. Open source, simulation-first, 100% test coverage.">
 <link rel="stylesheet" href="style.css">
 <link rel="icon" href="app/icon.svg" type="image/svg+xml">
+<style>
+  video.demo { width: 100%; border-radius: 12px; border: 1px solid var(--line);
+               background: #10222f; display: block; }
+</style>
 </head>
 <body>
 <header class="hero landing">
   <nav class="top">
-    <a class="brand" href="index.html">
+    <a class="brand" href="#top">
       <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="10" r="5" fill="#e8a013"/>
         <path d="M2 18c3-2 5 2 8 0s5 2 8 0" stroke="#fff" stroke-width="2"
               fill="none" stroke-linecap="round"/>
       </svg>
       SOLARHELM</a>
-    <a href="features.html">Features</a>
-    <a href="demo.html">Demo</a>
-    <a href="theory.html">How it works</a>
-    <a href="calculator.html">Calculator</a>
-    <a href="buying.html">Buying</a>
-    <a href="install.html">Install</a>
+    <a href="#how">How it works</a>
+    <a href="#demo">Demo</a>
+    <a href="#calculator">Calculator</a>
+    <a href="#buying">Buying</a>
+    <a href="#install">Install</a>
+    <a href="app/">App</a>
     <a class="gh" href="https://github.com/abecadel/SolarHelm">GitHub</a>
   </nav>
-  <div class="hero-inner">
+  <div class="hero-inner" id="top">
     <div>
       <h1>Cruise on <span class="sun">sunshine</span>,<br>not on the
       battery.</h1>
@@ -39,12 +43,10 @@
         <li class="badge">100% test coverage, CI-gated</li>
         <li class="badge">Simulation-first</li>
       </ul>
-      <a class="cta primary" href="app/">Open the planner app →</a>
-      <a class="cta secondary" href="demo.html">Watch the 40 s demo</a>
+      <a class="cta primary" href="app/">Open the app →</a>
+      <a class="cta secondary" href="#demo">Watch the 40 s demo</a>
     </div>
     <div class="hero-visual">
-      <!-- Energy-flow diagram: sun -> PV -> bus; bus -> motor + hotel;
-           SolarHelm closes the loop on the shunt reading. -->
       <svg viewBox="0 0 440 330" role="img"
            aria-label="Energy flow: solar panels feed the battery bus; SolarHelm trims the motor so battery power stays at zero watts.">
         <defs>
@@ -57,7 +59,6 @@
             <path d="M0 0 L10 5 L0 10 z" fill="#e8a013"/>
           </marker>
         </defs>
-        <!-- sun -->
         <circle cx="60" cy="48" r="20" fill="#e8a013"/>
         <g stroke="#e8a013" stroke-width="3" stroke-linecap="round">
           <line x1="60" y1="14" x2="60" y2="22"/>
@@ -69,7 +70,6 @@
           <line x1="84" y1="24" x2="78" y2="30"/>
           <line x1="42" y1="66" x2="36" y2="72"/>
         </g>
-        <!-- PV / MPPT node -->
         <rect x="130" y="26" width="120" height="44" rx="10"
               fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.45)"/>
         <text x="190" y="45" fill="#fff" font-size="13" font-weight="700"
@@ -78,7 +78,6 @@
               text-anchor="middle">harvest the sun</text>
         <path class="flow" d="M96 48 H126" stroke="#e8a013" stroke-width="3"
               fill="none" marker-end="url(#arrsun)"/>
-        <!-- battery bus node -->
         <rect x="150" y="120" width="140" height="52" rx="10"
               fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.45)"/>
         <text x="220" y="140" fill="#fff" font-size="13" font-weight="700"
@@ -87,7 +86,6 @@
               text-anchor="middle">shunt measures net power</text>
         <path class="flow" d="M190 74 V116" stroke="#e8a013" stroke-width="3"
               fill="none" marker-end="url(#arrsun)"/>
-        <!-- hotel branch -->
         <rect x="330" y="120" width="90" height="52" rx="10"
               fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.3)"/>
         <text x="375" y="141" fill="#fff" font-size="12" font-weight="700"
@@ -96,7 +94,6 @@
               text-anchor="middle">lights, fridge…</text>
         <path class="flow" d="M294 146 H326" stroke="#7fc0ef" stroke-width="3"
               fill="none" marker-end="url(#arr)"/>
-        <!-- motor node -->
         <rect x="150" y="230" width="140" height="52" rx="10"
               fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.45)"/>
         <text x="220" y="251" fill="#fff" font-size="13" font-weight="700"
@@ -105,7 +102,6 @@
               text-anchor="middle">speed floats with the sun</text>
         <path class="flow" d="M220 176 V226" stroke="#7fc0ef" stroke-width="3"
               fill="none" marker-end="url(#arr)"/>
-        <!-- SolarHelm control loop -->
         <rect x="18" y="176" width="104" height="60" rx="12"
               fill="#e8a013"/>
         <text x="70" y="200" fill="#3a2800" font-size="13" font-weight="800"
@@ -132,141 +128,177 @@
   </svg>
 </header>
 <main class="landing">
-  <section>
-    <div class="section-kicker">The idea</div>
+  <section id="how" class="anchor-offset">
+    <div class="section-kicker">How it works</div>
     <h2 class="big">One control variable changes everything</h2>
     <p>A conventional cruise control holds speed and drains the battery to
     do it. SolarHelm targets <b>0&nbsp;W of battery power</b> and
-    continuously trims the motor so propulsion follows solar production.
-    No forecast in the loop, no coupling to any charger — the physics does
-    the accounting, the controller follows it. That single trick is enough
-    to cruise all day, day after day, without shore power.
-    <a href="theory.html">Read how it works →</a></p>
-  </section>
-  <section>
-    <div class="section-kicker">Features</div>
-    <h2 class="big">A complete system, boat to phone</h2>
+    continuously trims the motor so propulsion follows solar production —
+    no forecast in the loop, no coupling to any charger; the physics does
+    the accounting. Target −200&nbsp;W and the boat may borrow from the
+    pack for speed; target +500&nbsp;W and it must keep charging while it
+    moves. At the reserve state of charge the pack simply can't be drawn
+    down further.</p>
+    <pre class="diagram">
+ shunt (~1 Hz) ─► filter τ2s ─► deadband ±25 W (freezes cmd)
+   ─► PI + tracking anti-windup ─► slew +2/−5 %/s ─► clamps ─► throttle</pre>
+    <p>Each stage kills a failure mode: the filter keeps wave ripple off
+    the prop, the freezing deadband stops hunting, the anti-windup gives
+    zero overshoot on solar surges, and down-slew is 2.5× faster than up
+    because losing sun is a safety event. Underneath, a protection
+    envelope enforces the hardware's limits (staged voltage-sag backoff,
+    current cap, temperature derating) regardless of what any controller
+    wants. MANUAL is the hardware default: a relay held by a toggling
+    heartbeat — a crash stops the edges and the helm is yours. Proof with
+    graphs: <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/SIMULATION_RESULTS.md">simulation results</a>,
+    full theory: <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/CONTROL_THEORY.md">docs/CONTROL_THEORY.md</a>.</p>
     <div class="grid3">
-      <a class="feature-link" href="features.html#control"><div class="tile">
-        <b>Power-tracking control</b><br>Filtered, deadbanded PI with
-        anti-windup and asymmetric ramps. Zero overshoot, proven in
-        simulation graphs.<span class="more">Details →</span></div></a>
-      <a class="feature-link" href="features.html#safety"><div class="tile">
-        <b>Fail-safe by hardware</b><br>MANUAL is the relay's default.
-        Any fault — stale data, crash, brownout — ends with the helm in
-        your hands.<span class="more">Details →</span></div></a>
-      <a class="feature-link" href="features.html#voyage"><div class="tile">
-        <b>Voyage planner</b><br>Waypoints in, verdict out: departure
-        sweep, solar stops, arrival SOC with uncertainty, six named
-        safety gates.<span class="more">Details →</span></div></a>
-      <a class="feature-link" href="features.html#learning"><div class="tile">
-        <b>Learns your boat</b><br>Telemetry refits the hull curve,
-        calibrates uncertainty and flags drift — a fouled hull shows up
-        in the numbers.<span class="more">Details →</span></div></a>
-      <a class="feature-link" href="features.html#drivers"><div class="tile">
-        <b>Open hardware path</b><br>ESP32-S3, Victron shunt, any 0–5 V
-        motor controller. Drivers are plugins; no brand lock-in.
-        <span class="more">Details →</span></div></a>
-      <a class="feature-link" href="features.html#engineering"><div class="tile">
-        <b>Engineering you can audit</b><br>One C++ core for simulator
-        and boat, 100% line coverage in CI, every claim linked to a doc.
-        <span class="more">Details →</span></div></a>
+      <div class="tile"><b>The app is the control panel</b><br>Plan trips
+        and A→B voyages on an OpenStreetMap route editor, watch live
+        telemetry, inspect the learned model, configure the boat — served
+        from the web or from the ESP32's own flash.</div>
+      <div class="tile"><b>Two boat links</b><br>Wi-Fi to the boat's
+        access point for setup and log download; Bluetooth underway so
+        the phone keeps its internet for forecasts and maps.</div>
+      <div class="tile"><b>It learns your boat</b><br>Telemetry logs refit
+        the hull curve, calibrate uncertainty, map where the boat needs
+        extra power, and flag drift — a fouled hull shows up in the
+        numbers.</div>
     </div>
   </section>
   <section>
     <div class="statband">
       <div><b>0 W</b><span>the control target</span></div>
-      <div><b>285+</b><span>unit tests, C++ and JS</span></div>
+      <div><b>330+</b><span>unit tests, C++ and JS</span></div>
       <div><b>100%</b><span>line coverage, CI-enforced</span></div>
       <div><b>13</b><span>simulated scenarios</span></div>
       <div><b>3</b><span>costed build levels</span></div>
     </div>
   </section>
-  <section>
-    <div class="section-kicker">See it</div>
+  <section id="demo" class="anchor-offset">
+    <div class="section-kicker">Demo</div>
     <h2 class="big">Sixty seconds of planner</h2>
-    <a class="teaser" href="demo.html">
-      <img src="assets/demo-poster.png"
-           alt="Frame from the SolarHelm planner demo video">
-      <div class="play"><span>▶&nbsp; Watch the demo</span></div>
-    </a>
-    <p class="note">Every number in the demo is computed by the app's real
-    code — no faked screenshots. <a href="app/">Or just open the app.</a></p>
+    <video class="demo" controls muted playsinline preload="metadata"
+           poster="assets/demo-poster.png">
+      <source src="assets/demo.mp4" type="video/mp4">
+      Your browser can't play this video —
+      <a href="assets/demo.mp4">download it</a> instead.
+    </video>
+    <p class="note">Every number in the video is computed by the app's
+    real code (the render script imports the planner's modules) — no
+    faked screenshots. <a href="app/">Or just open the app.</a></p>
   </section>
-  <section>
-    <div class="section-kicker">Built in the open</div>
-    <h2 class="big">Research-grade honesty</h2>
-    <div class="grid3">
-      <div class="tile"><b>Simulation first</b><br>The controller proved
-        itself on 300–1500&nbsp;W solar swings before any hardware
-        existed — with
-        <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/SIMULATION_RESULTS.md">committed graphs</a>.</div>
-      <div class="tile"><b>Real-world validation</b><br>The
-        <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/case-studies/HELIOS_11.md">Helios 11 case study</a>:
-        3,000 nm on sunshine, every claim source-tagged, physics
-        cross-checked.</div>
-      <div class="tile"><b>Everything documented</b><br>Control theory,
-        safety requirements, motor-protection research, wiring, a gated
-        <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/HARDWARE_TEST_PLAN.md">test plan</a>.</div>
+  <section id="calculator" class="anchor-offset">
+    <div class="section-kicker">Calculator</div>
+    <h2 class="big">What could my boat do?</h2>
+    <div class="form-grid">
+      <div><label for="boat-class">Boat class</label>
+        <select id="boat-class"></select></div>
+      <div><label for="pv-wp">Solar array [Wp]</label>
+        <input id="pv-wp" type="number" min="100" step="50" value="900"></div>
+      <div><label for="battery-kwh">Battery [kWh]</label>
+        <input id="battery-kwh" type="number" min="0.5" step="0.1"
+               value="2.56"></div>
+      <div><label for="hotel-w">Hotel load [W]</label>
+        <input id="hotel-w" type="number" min="0" step="10" value="60"></div>
     </div>
+    <div id="results"></div>
+    <p class="note">Model: clear June day at Split (43.5°N), the reference
+    hull curve scaled by boat class, 78% PV derating, 20% reserve.
+    Estimates — SolarHelm measures your real hull during sea trials.</p>
   </section>
-  <section>
-    <div class="section-kicker">Get started</div>
-    <h2 class="big">Three ways in</h2>
-    <div class="grid3">
-      <a class="feature-link" href="calculator.html"><div class="tile">
-        <b>1 · Dream</b><br>What could your boat do on solar? The
-        calculator estimates cruise speed, daily range and cost.
-        <span class="more">Open the calculator →</span></div></a>
-      <a class="feature-link" href="app/"><div class="tile">
-        <b>2 · Plan</b><br>The planner app predicts range, SOC and
-        arrival energy for real trips. Works offline, installs on your
-        phone.<span class="more">Open the app →</span></div></a>
-      <a class="feature-link" href="buying.html"><div class="tile">
-        <b>3 · Build</b><br>Bench kit from ~414 PLN, full drive system
-        ~5,120 PLN, solar cruiser ~7,700 PLN — with a gated test
-        protocol.<span class="more">Buying guide →</span></div></a>
-    </div>
+  <section id="buying" class="anchor-offset">
+    <div class="section-kicker">Buying</div>
+    <h2 class="big">Three build levels, three gates</h2>
+    <p>Buy in waves, gated by tests — never all at once. Wave 1 is bench
+    electronics; Wave 2 (motor, controller, battery) only after the bench
+    passes <b>and</b> the motor head is opened to confirm its topology;
+    Wave 3 (solar) after sea trials produce a real efficiency curve.
+    Prices in PLN, snapshot 2026-08-29 — links and verification flags in
+    the <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/BUYING_GUIDE.md">full guide</a>.</p>
+    <table class="days">
+      <tr><th>Level</th><th>What</th><th>PLN</th></tr>
+      <tr><td>BOM A — bench</td><td>ESP32-S3, GP8403 DAC, GNSS, relay
+        logic, supplies (+ SmartShunt 389 — buy it now, it works on a
+        bench PSU)</td><td>≈ 414</td></tr>
+      <tr><td>BOM B — drive system</td><td>Storm N86 motor, Kelly
+        controller, 2.56 kWh LiFePO4, shunt, contactor + fuse + kill
+        switch chain, cabling</td><td>≈ 5 120</td></tr>
+      <tr><td>BOM C — solar cruiser</td><td>BOM B + 2×450 W rigid panels,
+        2× Victron MPPT, mounting, PV wiring (each further +900 Wp ≈
+        +1 550)</td><td>≈ 7 600</td></tr>
+    </table>
+    <p class="note">Cheap is fine for ESP32 boards, GNSS modules,
+    enclosures and standard residential panels (6× cheaper per watt than
+    "marine", same cells — check for IEC 61701 salt-mist rating). Don't
+    cheap out on the shunt, the fuse/contactor/kill chain, BMS quality or
+    cable sizing. Avoid flexible panels except where nothing else fits.</p>
+  </section>
+  <section id="install" class="anchor-offset">
+    <div class="section-kicker">Install</div>
+    <h2 class="big">Wiring and commissioning</h2>
+    <pre class="diagram">
+ (+) Battery ── main fuse ── battery switch ──┬── MPPT battery (+)
+      │        (at the post,                  ├── contactor ── motor ctrl ── motor
+      │         before anything)              └── DC/DC ── hotel loads
+ (−) Battery ── SmartShunt ──┬────────────────┴── common negative bus
+                             └── EVERY load's return goes through
+                                 the shunt, or SOC lies
+
+ GP8403 DAC ─► hardware clamp ─► relay NO ─┐
+ Manual throttle pot ─────────── relay NC ─┼─► motor controller
+ relay common ─────────────────────────────┘   throttle input</pre>
+    <p>Four rules, no exceptions: main fuse first at the battery post,
+    sized by calculation; the shunt sees every return; the kill switch
+    drives the contactor directly and never passes through SolarHelm;
+    panel strings stay under the MPPT's Voc limit at <i>cold</i>
+    temperature. The relay is normally closed on the manual pot — with
+    SolarHelm dead, the helm works as if it were never installed.</p>
+    <p>Commissioning is three gated phases with written acceptance
+    criteria — bench (scope the DAC's cold-boot 0 V, prove the relay
+    drops on a firmware hang, watchdogs, HIL), motor bench (autopsy the
+    motor before buying the controller, calibrate prop-off, verify every
+    fault path in hardware), then the water (dock trials, SOLAR maiden,
+    efficiency runs that produce your real hull curve). Never proceed on
+    a failed gate. Full protocol:
+    <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/HARDWARE_TEST_PLAN.md">docs/HARDWARE_TEST_PLAN.md</a>,
+    wiring detail: <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/WIRING.md">docs/WIRING.md</a>.</p>
   </section>
   <section>
     <div class="warnbox"><b>Safety first.</b> SolarHelm generates a
-    low-power throttle signal only; it never switches propulsion current.
-    A normally-de-energized relay makes MANUAL the default whenever the
-    controller is unpowered, and an independent kill switch always
-    remains. Read
+    low-power throttle signal only; it never switches propulsion current,
+    an independent kill switch always remains, and it is not a certified
+    navigation system. Read
     <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/SAFETY.md">docs/SAFETY.md</a>
-    before wiring anything. SolarHelm is not a certified navigation
-    system.</div>
+    before wiring anything.</div>
   </section>
 </main>
 <footer>
   <div class="footer-cols">
-    <div><b>Project</b>
-      <a href="features.html">Features</a>
-      <a href="demo.html">Demo video</a>
-      <a href="theory.html">How it works</a>
-      <a href="app/">Planner app</a>
-      <a href="calculator.html">Calculator</a>
+    <div><b>Use it</b>
+      <a href="app/">The app</a>
+      <a href="#calculator">Calculator</a>
+      <a href="#demo">Demo video</a>
     </div>
-    <div><b>Build one</b>
-      <a href="buying.html">Buying guide</a>
-      <a href="install.html">Installation</a>
+    <div><b>Build it</b>
+      <a href="#buying">Buying</a>
+      <a href="#install">Install</a>
       <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/HARDWARE_TEST_PLAN.md">Test plan</a>
       <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/SAFETY.md">Safety</a>
     </div>
-    <div><b>Deep dives</b>
+    <div><b>Understand it</b>
       <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/CONTROL_THEORY.md">Control theory</a>
       <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/case-studies/HELIOS_11.md">Helios 11 case study</a>
-      <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/reference-vessels/SOLARHELM_LIGHT_POWERCAT.md">Light Powercat concept</a>
       <a href="https://github.com/abecadel/SolarHelm/blob/main/docs/ROADMAP.md">Roadmap</a>
     </div>
     <div><b>Source</b>
-      <a href="https://github.com/abecadel/SolarHelm">GitHub repository</a>
+      <a href="https://github.com/abecadel/SolarHelm">GitHub</a>
       <a href="https://github.com/abecadel/SolarHelm/issues">Issues</a>
       <a href="https://github.com/abecadel/SolarHelm/blob/main/LICENSE">MIT license</a>
     </div>
   </div>
   SolarHelm — open source, simulation-first, sea trials next.
 </footer>
+<script type="module" src="app/js/calc_main.js"></script>
 </body>
 </html>

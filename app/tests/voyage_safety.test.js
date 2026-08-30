@@ -40,11 +40,26 @@ test('assessPlan labels an infeasible plan without further gates', () => {
 });
 
 test('assessPlan returns SAFE when every gate passes', () => {
-  const r = assessPlan(baseInput());
+  const r = assessPlan(baseInput({ minStwKmh: 4.2 }));
   assert.equal(r.label, 'SAFE');
-  assert.equal(r.gates.length, 6);
+  assert.equal(r.gates.length, 7);
   assert.ok(r.gates.every((g) => g.pass));
   assert.ok(gate(r, 'adverse-arrival').detail.includes(`${HARD_FLOOR_PCT}%`));
+  assert.ok(gate(r, 'steerage').detail.includes('4.2 km/h'));
+});
+
+test('the steerage gate refuses un-steerable slow legs', () => {
+  const slow = assessPlan(baseInput({ minStwKmh: 1.8 }));
+  assert.equal(slow.label, 'POSSIBLE');
+  assert.equal(gate(slow, 'steerage').pass, false);
+  // A caller-supplied threshold is honoured.
+  const custom = assessPlan(baseInput({ minStwKmh: 1.8,
+                                        minSteerageKmh: 1.5 }));
+  assert.equal(gate(custom, 'steerage').pass, true);
+  // No motion data (e.g. the demo's synthetic input): not evaluated.
+  const none = assessPlan(baseInput());
+  assert.equal(gate(none, 'steerage').pass, true);
+  assert.ok(gate(none, 'steerage').detail.includes('not evaluated'));
 });
 
 test('assessPlan defaults: zero age, no penalty flag, standard floor', () => {

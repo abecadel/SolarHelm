@@ -26,7 +26,12 @@
 // docs/HARDWARE_TEST_PLAN.md and must pass there before Wave-2 ordering.
 
 #include <Arduino.h>
+#include <BLE2902.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
 #include <LittleFS.h>
+#include <Preferences.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <Wire.h>
@@ -48,7 +53,16 @@ constexpr uint32_t kWdtTimeoutS = 5;
 constexpr char kApSsid[] = "SolarHelm";
 constexpr char kApPassword[] = "solarhelm";  // bench default; change on boat
 
-sh::ControlConfig g_config;  // validated defaults; NVS config is later work
+// BLE GATT: the underway link for the HTTPS-served app (Web Bluetooth
+// needs a secure context, and a secure page cannot call the boat's plain
+// HTTP - so telemetry reads and REMOTE targets also ride BLE). Same
+// UUIDs in app/js/ble_link.js.
+constexpr char kBleService[] = "0b3d5c00-e8a0-4013-9c60-1c3d5c000001";
+constexpr char kBleTelemetryChar[] = "0b3d5c00-e8a0-4013-9c60-1c3d5c000002";
+constexpr char kBleRemoteChar[] = "0b3d5c00-e8a0-4013-9c60-1c3d5c000003";
+
+sh::ControlConfig g_config;  // defaults overlaid from NVS in setup()
+Preferences g_prefs;         // NVS namespace for the tunable config
 
 class SerialTransitionLogger : public sh::ITransitionLogger {
 public:
@@ -85,6 +99,58 @@ bool g_heartbeat_level = false;
 bool g_auto_switch_stable = false;  // debounced: true = AUTO enabled
 bool g_auto_switch_last_raw = false;
 char g_telemetry_json[512] = "{}";
+BLECharacteristic* g_ble_telemetry = nullptr;
+
+// NVS keys are index-based ("f0".."fN": NVS caps keys at 15 chars, our
+// field names don't fit). The namespace carries a version so a change to
+// the whitelist ORDER never reads stale slots as the wrong field.
+constexpr char kPrefsNamespace[] = "shcfg1";
+
+void loadConfigFromNvs() {
+    g_prefs.begin(kPrefsNamespace, /*readOnly=*/true);
+    sh::ControlConfig candidate = g_config;
+    for (size_t i = 0; i < sh::kConfigFieldCount; ++i) {
+        char key[8];
+        snprintf(key, sizeof(key), "f%u", static_cast<unsigned>(i));
+        candidate.*(sh::kConfigFields[i].member) =
+            g_prefs.getFloat(key, candidate.*(sh::kConfigFields[i].member));
+    }
+    g_prefs.end();
+    // A corrupted store must never brick the controller: defaults win.
+    if (candidate.validate() == sh::ConfigError::kNone) {
+        g_config = candidate;
+    } else {
+        Serial.println("WARN: stored config invalid - using defaults");
+    }
+}
+
+void saveConfigToNvs() {
+    g_prefs.begin(kPrefsNamespace, /*readOnly=*/false);
+    for (size_t i = 0; i < sh::kConfigFieldCount; ++i) {
+        char key[8];
+        snprintf(key, sizeof(key), "f%u", static_cast<unsigned>(i));
+        g_prefs.putFloat(key, g_config.*(sh::kConfigFields[i].member));
+    }
+    g_prefs.end();
+}
+
+void applyRemoteBody(const char* body, size_t len) {
+    const sh::RemoteCommand cmd = sh::parseRemoteCommand(body, len);
+    if (!cmd.valid) return;
+    const uint32_t now_ms = millis();
+    g_helm.setRemoteTarget(cmd.target_w, now_ms);
+    if (g_auto_switch_stable && g_helm.mode() != sh::Mode::kRemote) {
+        g_helm.requestMode(sh::Mode::kRemote, now_ms);
+    }
+}
+
+class BleRemoteCallbacks : public BLECharacteristicCallbacks {
+public:
+    void onWrite(BLECharacteristic* c) override {
+        const std::string v = c->getValue();
+        applyRemoteBody(v.c_str(), v.size());
+    }
+};
 
 void pumpSerialInputs(uint32_t now_ms) {
     uint8_t buf[128];
@@ -120,15 +186,40 @@ void handleRemote() {
                       "[0,100000]\"}");
         return;
     }
-    const uint32_t now_ms = millis();
-    g_helm.setRemoteTarget(cmd.target_w, now_ms);
     // REMOTE only ever engages while the physical AUTO switch grants
     // automatic control; otherwise the target just sits fresh, and the
     // helm stays whatever it was.
-    if (g_auto_switch_stable && g_helm.mode() != sh::Mode::kRemote) {
-        g_helm.requestMode(sh::Mode::kRemote, now_ms);
-    }
+    applyRemoteBody(body.c_str(), body.length());
     g_server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void handleConfigGet() {
+    sendCors();
+    char buf[768];
+    sh::writeConfigJson(g_config, buf, sizeof(buf));
+    g_server.send(200, "application/json", buf);
+}
+
+void handleConfigPost() {
+    sendCors();
+    const String body = g_server.arg("plain");
+    sh::ControlConfig next;
+    const sh::ConfigPatchResult r =
+        sh::applyConfigPatch(g_config, body.c_str(), body.length(), &next);
+    if (!r.valid) {
+        char err[128];
+        snprintf(err, sizeof(err),
+                 "{\"ok\":false,\"error\":\"%s\",\"fields\":%d}",
+                 sh::configErrorName(r.error), r.fields_applied);
+        g_server.send(400, "application/json", err);
+        return;
+    }
+    g_config = next;  // Helm reads this object by reference each tick
+    saveConfigToNvs();
+    char ok[64];
+    snprintf(ok, sizeof(ok), "{\"ok\":true,\"fields\":%d}",
+             r.fields_applied);
+    g_server.send(200, "application/json", ok);
 }
 
 void handleOptions() {
@@ -178,6 +269,9 @@ void controlTick(uint32_t now_ms, float dt_s) {
 
     sh::writeTelemetryJson(out.telemetry, g_telemetry_json,
                            sizeof(g_telemetry_json));
+    if (g_ble_telemetry != nullptr) {
+        g_ble_telemetry->setValue(g_telemetry_json);
+    }
 }
 
 }  // namespace
@@ -197,6 +291,9 @@ void setup() {
     Serial1.begin(19200, SERIAL_8N1, kPinVeDirectRx, -1);
     Serial2.begin(115200, SERIAL_8N1, kPinGpsRx, kPinGpsTx);
 
+    // Tunable config from NVS (validated; defaults on any corruption).
+    loadConfigFromNvs();
+
     Wire.begin(kPinI2cSda, kPinI2cScl);
     // Re-asserts 0 V before anything else may run (gate A1 behaviour).
     if (!g_throttle.begin()) {
@@ -208,6 +305,9 @@ void setup() {
     g_server.on("/telemetry", HTTP_GET, handleTelemetry);
     g_server.on("/remote", HTTP_POST, handleRemote);
     g_server.on("/remote", HTTP_OPTIONS, handleOptions);
+    g_server.on("/config", HTTP_GET, handleConfigGet);
+    g_server.on("/config", HTTP_POST, handleConfigPost);
+    g_server.on("/config", HTTP_OPTIONS, handleOptions);
     // The companion app itself, served from flash so the phone needs
     // nothing but this access point (tools/pack_fs.sh + uploadfs).
     if (LittleFS.begin()) {
@@ -217,6 +317,21 @@ void setup() {
                        "(run pack_fs.sh + uploadfs)");
     }
     g_server.begin();
+
+    // BLE GATT: telemetry (read) + remote target (write). Runtime
+    // coexistence of AP WiFi + BLE is tuned at bench gate A7.
+    BLEDevice::init(kApSsid);
+    BLEServer* ble_server = BLEDevice::createServer();
+    BLEService* ble_service = ble_server->createService(kBleService);
+    g_ble_telemetry = ble_service->createCharacteristic(
+        kBleTelemetryChar, BLECharacteristic::PROPERTY_READ);
+    g_ble_telemetry->setValue(g_telemetry_json);
+    BLECharacteristic* ble_remote = ble_service->createCharacteristic(
+        kBleRemoteChar, BLECharacteristic::PROPERTY_WRITE);
+    ble_remote->setCallbacks(new BleRemoteCallbacks());
+    ble_service->start();
+    BLEDevice::getAdvertising()->addServiceUUID(kBleService);
+    BLEDevice::startAdvertising();
 
     esp_task_wdt_init(kWdtTimeoutS, true);
     esp_task_wdt_add(nullptr);

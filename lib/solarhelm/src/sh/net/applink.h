@@ -17,6 +17,7 @@
 
 #include <cstddef>
 
+#include "sh/core/config.h"
 #include "sh/telemetry/telemetry.h"
 
 namespace sh {
@@ -38,5 +39,36 @@ struct RemoteCommand {
 // tolerant, other keys ignored; valid only when the value is a finite
 // number in [0, kRemoteTargetMaxW].
 RemoteCommand parseRemoteCommand(const char* body, size_t len);
+
+// ---- Runtime-tunable configuration over the link ----
+//
+// A deliberate WHITELIST of ControlConfig fields the app may read and
+// patch: behavior tuning only — gains, deadband, ramps, targets,
+// reserve, timeouts. Protection-envelope thresholds (voltage sag,
+// current cap, temperature) are NOT remotely writable by design: they
+// change with a screwdriver and a datasheet, not from a phone.
+struct ConfigField {
+    const char* name;
+    float ControlConfig::* member;
+};
+extern const ConfigField kConfigFields[];
+extern const size_t kConfigFieldCount;
+
+// Serializes the whitelisted fields as one JSON object. snprintf-style.
+int writeConfigJson(const ControlConfig& cfg, char* buf, size_t buf_len);
+
+struct ConfigPatchResult {
+    bool valid = false;         // patch parsed AND validated
+    int fields_applied = 0;     // recognized keys with finite values
+    ConfigError error = ConfigError::kNone;  // validation verdict
+};
+
+// Applies a JSON body of whitelisted keys onto a COPY of `current`,
+// validates, and only writes `out` when everything passes. Unknown keys
+// are ignored; a recognized key with a non-finite value invalidates the
+// whole patch; a patch with zero recognized keys is invalid.
+ConfigPatchResult applyConfigPatch(const ControlConfig& current,
+                                   const char* body, size_t len,
+                                   ControlConfig* out);
 
 }  // namespace sh

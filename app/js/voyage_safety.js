@@ -4,6 +4,10 @@
 // passed/failed IS the label's explanation and is always shown.
 
 export const HARD_FLOOR_PCT = 10;
+// Below this speed-through-water the rudder loses authority in waves and
+// current — energy optimization must never plan a leg it cannot steer
+// (docs/case-studies/HELIOS_11_LESSONS.md L12).
+export const MIN_STEERAGE_KMH = 2.5;
 
 export function assessPlan(input) {
   const {
@@ -15,6 +19,8 @@ export function assessPlan(input) {
     socQuantiles,        // from arrivalSocQuantiles()
     reserveSocPct,
     hardFloorPct = HARD_FLOOR_PCT,
+    minStwKmh,           // slowest planned moving STW; undefined = no plan
+    minSteerageKmh = MIN_STEERAGE_KMH,
   } = input;
 
   if (!feasible) {
@@ -54,6 +60,14 @@ export function assessPlan(input) {
     pass: socQuantiles.conservativePct >= hardFloorPct,
     detail: `conservative arrival ${socQuantiles.conservativePct.toFixed(0)}%` +
             ` vs hard floor ${hardFloorPct}%`,
+  });
+  gates.push({
+    id: 'steerage',
+    pass: minStwKmh === undefined || minStwKmh >= minSteerageKmh,
+    detail: minStwKmh === undefined
+        ? 'not evaluated (no motion data in the plan)'
+        : `slowest planned leg ${minStwKmh.toFixed(1)} km/h vs minimum ` +
+          `steerage ${minSteerageKmh.toFixed(1)} km/h`,
   });
   gates.push({
     id: 'calibrated-uncertainty', pass: !!socQuantiles.calibrated,

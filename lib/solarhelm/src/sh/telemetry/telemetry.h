@@ -30,6 +30,11 @@ struct TelemetryRecord {
     float efficiency_wh_km = 0.0f;
     float reserve_soc_pct = 0.0f;
     uint16_t fault_flags = 0;
+    // Position of the sample (0,0 = no fix — the null-island sentinel is
+    // documented; kFaultGpsStale says why). Positions make the log usable
+    // for geographic residual learning.
+    double latitude_deg = 0.0;
+    double longitude_deg = 0.0;
 };
 
 // CSV header matching writeCsvRow's column order.

@@ -163,15 +163,22 @@
 
 <section id="tab-boat" hidden>
   <fieldset>
-    <legend>Boat link (ESP32 SoftAP)</legend>
+    <legend>Boat link</legend>
     <div class="grid">
-      <div><label for="boat-url">Boat address</label>
+      <div><label for="boat-transport">Link type</label>
+        <select id="boat-transport">
+          <option value="http">Wi-Fi (boat network)</option>
+          <option value="ble">Bluetooth</option>
+        </select></div>
+      <div><label for="boat-url">Boat address (Wi-Fi)</label>
         <input id="boat-url" type="text" value="http://192.168.4.1"></div>
       <div><label>&nbsp;</label><button id="boat-connect">Connect</button></div>
     </div>
-    <p class="hint">Join the boat's <b>SolarHelm</b> Wi-Fi first. The app
-      itself can be served from this address — no internet needed on the
-      water.</p>
+    <p class="hint"><b>Wi-Fi:</b> join the boat's <b>SolarHelm</b> network;
+      the app itself is served from that address — no internet needed.
+      <b>Bluetooth:</b> for this app opened from the web — your phone keeps
+      its normal internet for forecasts and maps while talking to the boat.
+      (No Web Bluetooth on iPhone — use the Wi-Fi mode there.)</p>
   </fieldset>
   <p id="boat-status" class="statusline"></p>
   <section id="boat-cards"></section>
@@ -230,9 +237,23 @@
       <div><button id="setup-reset">Reset to reference profile</button></div>
     </div>
     <p id="setup-status" class="statusline"></p>
-    <p class="hint">Boat-side config sync (NVS over the SoftAP API) arrives
-      with the bench milestone — until then this configuration lives in
-      this browser and drives all planning.</p>
+    <p class="hint">This boat profile drives all planning and lives in this
+      browser.</p>
+  </fieldset>
+  <fieldset>
+    <legend>Boat control tunables (over the boat's Wi-Fi)</legend>
+    <div class="grid">
+      <div><label for="setup-boat-url">Boat address</label>
+        <input id="setup-boat-url" type="text"></div>
+      <div><label>&nbsp;</label>
+        <button id="setup-boat-load">Load from boat</button></div>
+    </div>
+    <label for="setup-boat-config" class="hint">Whitelisted control
+      parameters (gains, deadband, ramps, reserve — never the protection
+      envelope). The boat validates and stores them in NVS.</label>
+    <textarea id="setup-boat-config" rows="6"></textarea>
+    <button id="setup-boat-push">Push to boat</button>
+    <p id="setup-boat-status" class="statusline"></p>
   </fieldset>
 </section>
 

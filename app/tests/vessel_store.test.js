@@ -44,12 +44,46 @@ test('parseTelemetryRows rejects unusable logs', () => {
       'timestamp_ms,speed_kmh,motor_estimated_power_w\nx,y,z'), null);
 });
 
+test('parseTelemetryRows carries positions when the log has them', () => {
+  const rows = parseTelemetryRows(
+      'timestamp_ms,speed_kmh,motor_estimated_power_w,latitude_deg,' +
+      'longitude_deg\n1000,5.0,400,43.5,16.4\n2000,5.1,410,0,0');
+  assert.equal(rows[0].lat, 43.5);
+  assert.equal(rows[1].lat, 0); // sentinel kept; filtered at learn time
+});
+
+test('learnFromTelemetry returns positioned residuals for the geo store',
+     () => {
+  const vessel = vesselFromProfile(PROFILE);
+  const lines = ['timestamp_ms,speed_kmh,motor_estimated_power_w,' +
+                 'latitude_deg,longitude_deg'];
+  let t = 0;
+  const add = (v, p, lat, lon) => {
+    for (let s = 0; s < 90; s++) {
+      lines.push(`${t * 1000},${v},${p},${lat},${lon}`);
+      t += 1;
+    }
+  };
+  add(4, 168, 43.5, 16.4);  // settling, discarded
+  add(4, 168, 43.5, 16.4);
+  add(5, 300, 43.52, 16.4);
+  add(6, 492, 0, 0);        // no fix -> not positioned
+  add(7, 756, 43.56, 16.4);
+  const out = learnFromTelemetry(vessel, lines.join('\n'));
+  assert.equal(out.ok, true);
+  assert.equal(out.report.blocks, 4);
+  assert.equal(out.report.positioned.length, 3); // (0,0) filtered out
+  assert.ok(Math.abs(out.report.positioned[0].lat - 43.5) < 1e-9);
+  assert.equal(typeof out.report.positioned[0].rel, 'number');
+});
+
 test('learnFromTelemetry refits the curve and calibrates from residuals',
      () => {
   const vessel = vesselFromProfile(PROFILE);
   const out = learnFromTelemetry(vessel, GOOD_LOG);
   assert.equal(out.ok, true);
   assert.equal(out.report.blocks, 4);
+  assert.deepEqual(out.report.positioned, []); // log without positions
   assert.equal(out.vessel.voyages, 1);
   assert.equal(out.vessel.relErrors.length, 4);
   // The refit curve reproduces the log's law, not the profile seed.

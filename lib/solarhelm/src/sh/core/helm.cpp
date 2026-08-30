@@ -142,6 +142,10 @@ HelmOutput Helm::step(uint32_t now_ms, float dt_s,
     t.efficiency_wh_km = energy_.efficiencyWhPerKm();
     t.reserve_soc_pct = cfg_.reserve_soc_pct;
     t.fault_flags = faults;
+    if (speed_usable) {
+        t.latitude_deg = gps.latitude_deg;
+        t.longitude_deg = gps.longitude_deg;
+    }
     return out;
 }
 

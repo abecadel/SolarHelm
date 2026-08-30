@@ -5,7 +5,7 @@
 // EXCLUDED from the unit-coverage gate (browser lifecycle code); exercised
 // by the headless-browser smoke test instead. Keep it logic-free.
 
-const CACHE = 'solarhelm-planner-v2';
+const CACHE = 'solarhelm-planner-v3';
 const SHELL = [
   './',
   './index.html',
@@ -31,6 +31,8 @@ const SHELL = [
   './js/voyage_ui.js',
   './js/geo_residuals.js',
   './js/provider_stats.js',
+  './js/ble_link.js',
+  './js/net_cache.js',
   './vendor/leaflet/leaflet.js',
   './vendor/leaflet/leaflet.css',
 ];

@@ -1,10 +1,15 @@
-// Boat tab: the live link to the ESP32 over its SoftAP HTTP API
-// (firmware/main.cpp + sh/net/applink — GET /telemetry, POST /remote).
-//
-// Everything injectable: fetch, timers, download. The recorder captures
-// each telemetry sample; Export produces the exact CSV the C++ core logs
-// (sh::telemetryCsvHeader order) so the Model tab's learner — and the
-// desktop tools — consume it unchanged.
+// Boat tab: the live link to the ESP32 — over HTTP (SoftAP / boat-served
+// app) or Web Bluetooth (HTTPS-served app; see js/ble_link.js for why
+// both exist). The recorder captures each telemetry sample; Export
+// produces the exact CSV the C++ core logs (sh::telemetryCsvHeader
+// order) so the Model tab's learner consumes it unchanged.
+
+import {
+  bleSupported,
+  connectBle,
+  httpLink,
+  mixedContentBlocked,
+} from './ble_link.js';
 
 export const DEFAULT_BOAT_URL = 'http://192.168.4.1';
 export const POLL_MS = 1000;
@@ -31,7 +36,8 @@ export const CSV_HEADER =
     'battery_power_w,battery_soc_pct,solar_power_w,motor_command_pct,' +
     'motor_estimated_power_w,speed_kmh,distance_today_km,' +
     'energy_solar_today_wh,energy_motor_today_wh,energy_hotel_today_wh,' +
-    'efficiency_wh_km,reserve_soc_pct,fault_flags';
+    'efficiency_wh_km,reserve_soc_pct,fault_flags,latitude_deg,' +
+    'longitude_deg';
 
 export function toCsv(samples) {
   const rows = samples.map((t) => [
@@ -40,7 +46,7 @@ export function toCsv(samples) {
     t.motor_command_pct, t.motor_estimated_power_w, t.speed_kmh,
     t.distance_today_km, t.energy_solar_today_wh, t.energy_motor_today_wh,
     t.energy_hotel_today_wh, t.efficiency_wh_km, t.reserve_soc_pct,
-    t.fault_flags,
+    t.fault_flags, t.latitude_deg ?? 0, t.longitude_deg ?? 0,
   ].join(','));
   return [CSV_HEADER, ...rows].join('\n');
 }
@@ -74,19 +80,17 @@ export function renderTelemetry(doc, t) {
 export async function pollOnce(deps, state) {
   const doc = deps.doc;
   try {
-    const resp = await deps.fetchImpl(`${state.boatUrl}/telemetry`);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const t = await resp.json();
+    const t = await state.link.readTelemetry();
     state.samples.push(t);
     renderTelemetry(doc, t);
     doc.getElementById('boat-status').textContent =
-        `Live — ${state.samples.length} samples recorded this session`;
+        `Live via ${state.link.label} — ${state.samples.length} samples ` +
+        'recorded this session';
     return true;
   } catch (err) {
     doc.getElementById('boat-status').textContent =
-        `No boat at ${state.boatUrl} (${err && err.message ? err.message
-                                                          : err}). ` +
-        'Join the SolarHelm Wi-Fi and retry.';
+        `Link down (${err && err.message ? err.message : err}). ` +
+        'Check the connection and retry.';
     return false;
   }
 }
@@ -99,13 +103,13 @@ export async function sendRemote(deps, state) {
         'Enter a motor power target in watts (>= 0).';
     return false;
   }
+  if (!state.link) {
+    doc.getElementById('boat-remote-status').textContent =
+        'Connect to the boat first.';
+    return false;
+  }
   try {
-    const resp = await deps.fetchImpl(`${state.boatUrl}/remote`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target_w: target }),
-    });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    await state.link.sendRemote(target);
     doc.getElementById('boat-remote-status').textContent =
         `REMOTE target ${target.toFixed(0)} W sent. The boat degrades to ` +
         'SOLAR 10 s after targets stop.';
@@ -117,11 +121,33 @@ export async function sendRemote(deps, state) {
   }
 }
 
-/** Wires the Boat tab. deps adds: setIntervalFn, clearIntervalFn,
- *  download(filename, text). Returns the tab state (for tests). */
+async function buildLink(deps, state) {
+  const doc = deps.doc;
+  const transport = doc.getElementById('boat-transport').value;
+  if (transport === 'ble') {
+    if (!bleSupported(deps.bluetooth)) {
+      throw new Error('this browser has no Web Bluetooth - use the app ' +
+                      'served by the boat over Wi-Fi instead');
+    }
+    return connectBle(deps.bluetooth);
+  }
+  const base = (doc.getElementById('boat-url').value || DEFAULT_BOAT_URL)
+      .replace(/\/+$/, '');
+  if (mixedContentBlocked(deps.pageProtocol, base)) {
+    throw new Error('this HTTPS page cannot call the boat over plain ' +
+                    'HTTP - pick Bluetooth, or open the app from the ' +
+                    `boat itself at ${base}/`);
+  }
+  // The boat link must NEVER go through the offline cache: stale
+  // telemetry is worse than none.
+  return httpLink(deps.rawFetch ?? deps.fetchImpl, base);
+}
+
+/** Wires the Boat tab. deps adds: bluetooth, pageProtocol, setIntervalFn,
+ *  clearIntervalFn, download(filename, text). Returns the tab state. */
 export function initBoat(deps) {
   const doc = deps.doc;
-  const state = { boatUrl: DEFAULT_BOAT_URL, samples: [], timer: null };
+  const state = { link: null, samples: [], timer: null };
   doc.getElementById('boat-url').value = DEFAULT_BOAT_URL;
 
   const stop = () => {
@@ -129,22 +155,30 @@ export function initBoat(deps) {
       deps.clearIntervalFn(state.timer);
       state.timer = null;
     }
+    if (state.link) {
+      state.link.disconnect();
+      state.link = null;
+    }
     doc.getElementById('boat-connect').textContent = 'Connect';
   };
 
-  doc.getElementById('boat-connect').addEventListener('click', () => {
-    if (state.timer !== null) {
+  doc.getElementById('boat-connect').addEventListener('click', async () => {
+    if (state.timer !== null || state.link) {
       stop();
       doc.getElementById('boat-status').textContent =
           `Disconnected — ${state.samples.length} samples kept.`;
       return;
     }
-    state.boatUrl =
-        (doc.getElementById('boat-url').value || DEFAULT_BOAT_URL)
-            .replace(/\/+$/, '');
-    doc.getElementById('boat-connect').textContent = 'Disconnect';
     doc.getElementById('boat-status').textContent = 'Connecting…';
-    pollOnce(deps, state);
+    try {
+      state.link = await buildLink(deps, state);
+    } catch (err) {
+      doc.getElementById('boat-status').textContent =
+          `${err && err.message ? err.message : err}`;
+      return;
+    }
+    doc.getElementById('boat-connect').textContent = 'Disconnect';
+    await pollOnce(deps, state);
     state.timer = deps.setIntervalFn(() => pollOnce(deps, state), POLL_MS);
   });
 

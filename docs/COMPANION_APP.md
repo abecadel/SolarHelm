@@ -140,23 +140,36 @@ on the water (`tools/pack_fs.sh` + `pio run -t uploadfs`;
   textarea stays the synced source of truth). Verdict, six gates,
   arrival-SOC quantiles, Pareto row, and the per-day energy ledger
   (`planLedger`).
-- **Boat** — the live link (`js/boat_ui.js`): 1 Hz polling of
-  `GET /telemetry`, decoded fault flags, REMOTE power-target sender
-  (`POST /remote`), and a session recorder that exports the exact
-  firmware CSV format for the learner.
+- **Boat** — the live link (`js/boat_ui.js`) over either transport
+  (`js/ble_link.js`): **Wi-Fi HTTP** when the app is served by the boat
+  (same-origin, unrestricted) or **Bluetooth GATT** when the app comes
+  from the web (an HTTPS page cannot call plain-HTTP — mixed content —
+  and Web Bluetooth requires exactly the secure context the hosted app
+  has; the phone keeps its internet for forecasts and tiles). iOS has no
+  Web Bluetooth and uses the boat-served app. 1 Hz telemetry with
+  decoded fault flags, REMOTE power-target sender, and a session
+  recorder exporting the exact firmware CSV (positions included) for
+  the learner.
 - **Model** — everything learned (`js/model_ui.js`): hull curve,
   recommended cruise band (EnergyKnee), solar-equilibrium speed,
   calibration state, CUSUM drift, geo/provider store counts, the
   learn-from-CSV input, and a reset.
 - **Setup** — initial configuration (`js/setup_ui.js`): profile editor
-  with `config_revision` bump + change note on every save, persisted
-  locally; boat-side NVS sync is bench-milestone work and the tab says
-  so.
+  with `config_revision` bump + change note on every save (persisted
+  locally), plus **boat-side control tunables over the SoftAP**
+  (`GET/POST /config`): a whitelisted parameter set the boat validates
+  and stores in NVS — deliberately Wi-Fi-only, at the dock.
+
+Online data is offline-first: forecast fetches go through
+`js/net_cache.js`, so payloads downloaded while the phone had internet
+replay on the water — with their real age feeding the voyage
+freshness gate honestly. Telemetry now carries GPS positions, so a
+learned log also populates the geographic residual store
+(places where the boat needs more power than modelled).
 
 ## Next steps (see docs/ROADMAP.md)
 
-Bench gate A7 validates the live link and the flash-served app
-physically. Then: boat-side NVS config sync (`/config` API), flash
-telemetry logging with GPS positions (which starts populating the
-geographic bias store and provider-skill stats), H3 bins for the geo
-store, FES2022 offline tide packs, corridor-pack offline caching.
+Bench gate A7 validates both links (Wi-Fi and BLE), the flash-served
+app, and `/config` persistence physically. Then: provider-skill
+recording from live PV observations, H3 bins for the geo store, FES2022
+offline tide packs, corridor map-tile packs.

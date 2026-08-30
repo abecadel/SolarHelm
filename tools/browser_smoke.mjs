@@ -130,40 +130,18 @@ await page.click('#tabbtn-setup');
 const setupPv = await page.inputValue('#setup-pv');
 check(parseFloat(setupPv) > 0, 'setup tab is filled from the profile');
 
-// --- Website landing page ---
+// --- Website: one page, everything on it ---
 await page.goto(`${base}/index.html`);
 const landing = await page.content();
 check(landing.includes('SOLARHELM') && landing.includes('statband') &&
-      landing.includes('features.html'),
-      'site landing page renders nav, hero and stats band');
-await page.goto(`${base}/features.html`);
-const features = await page.content();
-check(features.includes('bench-pending') &&
-      features.includes('id="voyage"') &&
-      features.includes('Voyage planner'),
-      'features page renders with honest status tags');
-
-// --- Buying + installation guides ---
-await page.goto(`${base}/buying.html`);
-const buying = await page.content();
-check(buying.includes('BOM A') && buying.includes('5120'),
-      'buying guide renders the BOMs');
-await page.goto(`${base}/install.html`);
-const install = await page.content();
-check(install.includes('SmartShunt') && install.includes('MANUAL'),
-      'installation guide renders wiring rules');
-
-// --- Theory + demo pages ---
-await page.goto(`${base}/theory.html`);
-const theory = await page.content();
-check(theory.includes('battery') && theory.includes('deadband'),
-      'theory page renders the control pipeline');
-await page.goto(`${base}/demo.html`);
+      landing.includes('id="how"') && landing.includes('id="buying"') &&
+      landing.includes('id="install"'),
+      'single-page site renders hero and all sections');
+check(landing.includes('deadband') && landing.includes('SmartShunt') &&
+      landing.includes('BOM A'),
+      'how-it-works, install rules and BOMs are on the page');
 const demoVideo = await page.locator('video.demo source').getAttribute('src');
-check(demoVideo === 'assets/demo.mp4', 'demo page embeds the video');
-
-// --- Calculator ---
-await page.goto(`${base}/calculator.html`);
+check(demoVideo === 'assets/demo.mp4', 'the demo video is embedded');
 await page.waitForSelector('#results .card', { timeout: 15000 });
 const cruise = await page.textContent('#cruise-speed');
 const cruiseKmh = parseFloat(cruise);

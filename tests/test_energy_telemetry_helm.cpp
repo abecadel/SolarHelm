@@ -98,6 +98,8 @@ sh::GpsSample gpsSample(uint32_t t_ms, float speed_mps) {
     g.valid = true;
     g.timestamp_ms = t_ms;
     g.speed_mps = speed_mps;
+    g.latitude_deg = 43.5081;
+    g.longitude_deg = 16.4402;
     return g;
 }
 
@@ -151,6 +153,9 @@ TEST(helm_auto_output_active_and_bounded) {
     CHECK(out.telemetry.mode == static_cast<uint8_t>(Mode::kSolar));
     CHECK(out.telemetry.speed_kmh > 5.0f);  // 1.5 m/s = 5.4 km/h
     CHECK(out.telemetry.motor_estimated_power_w > 0.0f);
+    // Position rides along with a usable fix (geographic learning input).
+    CHECK_NEAR(out.telemetry.latitude_deg, 43.5081, 1e-6);
+    CHECK_NEAR(out.telemetry.longitude_deg, 16.4402, 1e-6);
 }
 
 TEST(helm_shunt_loss_forces_manual_with_zero_command) {
