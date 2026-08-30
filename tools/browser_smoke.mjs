@@ -142,6 +142,20 @@ await page.click('#tabbtn-setup');
 const setupPv = await page.inputValue('#setup-pv');
 check(parseFloat(setupPv) > 0, 'setup tab is filled from the profile');
 
+// --- Vessel Designer tab ---
+await page.click('#tabbtn-design');
+await page.click('#design-run');
+await page.waitForFunction(
+    () => document.querySelector('#design-results').innerHTML.length > 200,
+    null, { timeout: 20000 });
+const design = await page.innerHTML('#design-results');
+check(design.includes('catamaran') && design.includes('<svg'),
+      'vessel designer renders designs and the Pareto chart');
+const designStatus = await page.textContent('#design-status');
+check(designStatus.includes('feasible designs'),
+      `designer status shows the search result (“${
+        designStatus.slice(0, 60).trim()}…”)`);
+
 // --- Website: one page, everything on it ---
 await page.goto(`${base}/index.html`);
 const landing = await page.content();

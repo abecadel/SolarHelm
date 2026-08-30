@@ -82,9 +82,11 @@ curve via the Setup tab's "Set RANGE power from learned model".
   (L7); min-steerage-speed safety gate (L12)~~ ✅ shipped in the app;
   ~~IMU roll/pitch telemetry (L8)~~ ✅ plumbed end-to-end (struct → CSV
   → JSON → app; the physical IMU itself is Wave-1 bench work)
-- **SolarHelm Vessel Designer** (concept only, deliberately not
-  started): offline multi-objective search over {length, slenderness,
-  displacement, PV, battery, motor, speed} maximizing daily autonomous
-  distance under payload/comfort/stability/cost/reserve constraints,
-  reusing the planner's physics modules — see
-  docs/reference-vessels/SOLARHELM_LIGHT_POWERCAT.md
+- ~~**SolarHelm Vessel Designer** (concept only, deliberately not
+  started)~~ ✅ shipped as the app's **Design** tab (deferral reversed
+  by user decision): offline search over {length, displacement, PV,
+  battery, motor, hull count} maximizing daily autonomous distance
+  under payload/comfort/stability/cost/reserve constraints, on the
+  `tools/helios_sanity.py` physics ported to `app/js/hull_physics.js` —
+  see docs/reference-vessels/SOLARHELM_LIGHT_POWERCAT.md and
+  docs/COMPANION_APP.md

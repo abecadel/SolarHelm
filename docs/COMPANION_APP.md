@@ -167,6 +167,19 @@ on the water (`tools/pack_fs.sh` + `pio run -t uploadfs`;
   *Set RANGE power from learned model*: the EnergyKnee speed (floored
   at steerage) → hull power → `range_motor_power_w`, so RANGE mode
   cruises at the learned efficiency optimum fully autonomously.
+- **Design** — the Vessel Designer (`js/designer_ui.js` +
+  `js/designer_model.js` + `js/hull_physics.js`): a deterministic
+  search over the powercat research envelope maximizing **daily
+  autonomous distance** under payload, stability/comfort, cost and
+  battery-reserve constraints (Helios L8 — never Wh/km alone). The
+  parametric hull law is the JS port of `tools/helios_sanity.py`
+  (ITTC-57 friction + slenderness-scaled residuary, calibrated ±10%
+  against the powercat study grid); each candidate runs through the
+  same chain a real boat uses (curve → NNLS → EnergyKnee → Split June
+  solar day). Monohull comfort is a hard slenderness constraint, so the
+  search *demonstrates* L9 (no livable monohull exists in the 700–1300
+  kg envelope) instead of assuming it. Top designs, a cost/distance
+  Pareto front, and one-click adoption into the Setup form.
 
 Online data is offline-first: forecast fetches go through
 `js/net_cache.js`, so payloads downloaded while the phone had internet

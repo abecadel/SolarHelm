@@ -91,6 +91,7 @@
     <button id="tabbtn-boat" class="tabbtn">Boat</button>
     <button id="tabbtn-model" class="tabbtn">Model</button>
     <button id="tabbtn-setup" class="tabbtn">Setup</button>
+    <button id="tabbtn-design" class="tabbtn">Design</button>
   </div>
 </header>
 <main>
@@ -295,6 +296,29 @@
     </div>
     <p id="setup-boat-status" class="statusline"></p>
   </fieldset>
+</section>
+
+<section id="tab-design" hidden>
+  <p class="hint">The <b>Vessel Designer</b> searches the powercat
+    research envelope (7–10 m, 700–1300 kg, 2.5–4 kWp, 5–15 kWh, 3–6 kW)
+    for the boat that covers the most <b>kilometres per day on sun
+    alone</b>, under payload, stability/comfort (the Helios lesson),
+    cost and battery-reserve constraints — parametric physics until sea
+    trials replace it with the learned model.</p>
+  <div class="grid">
+    <div><label for="design-payload">Payload (crew + stores) [kg]</label>
+      <input id="design-payload" type="number" step="10" min="0"></div>
+    <div><label for="design-hotel">Hotel load [W]</label>
+      <input id="design-hotel" type="number" step="10" min="0"></div>
+    <div><label for="design-budget">Budget cap [PLN] (0 = none)</label>
+      <input id="design-budget" type="number" step="500" min="0"
+        value="0"></div>
+    <div><label>&nbsp;</label>
+      <button id="design-run">Search designs</button></div>
+  </div>
+  <p id="design-status" class="statusline"></p>
+  <section id="design-results"></section>
+  <button id="design-adopt">Adopt best design into Setup</button>
 </section>
 
   <footer>

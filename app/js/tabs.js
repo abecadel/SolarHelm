@@ -2,7 +2,7 @@
 // linkable/bookmarkable (#voyage, #boat, ...); dependencies injected
 // (doc + hash accessors) per the app's DI pattern.
 
-export const TABS = ['plan', 'voyage', 'boat', 'model', 'setup'];
+export const TABS = ['plan', 'voyage', 'boat', 'model', 'setup', 'design'];
 
 export function currentTab(hash) {
   const t = (hash || '').replace(/^#/, '');

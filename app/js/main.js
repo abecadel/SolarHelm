@@ -3,6 +3,7 @@
 // with logic lives in the tested modules.
 
 import { initBoat } from './boat_ui.js';
+import { initDesigner } from './designer_ui.js';
 import { initModel, refreshModel } from './model_ui.js';
 import { cachedFetch } from './net_cache.js';
 import { DEFAULT_PROFILE } from './profile.js';
@@ -47,6 +48,7 @@ openTileStore(window.indexedDB ?? null).then((store) => {
   initBoat(deps);
   initModel(deps, state);
   initSetup(deps, state, DEFAULT_PROFILE);
+  initDesigner(deps, state);
   initTabs(deps, (tab) => {
     if (tab === 'model') refreshModel(deps, state);
   });
