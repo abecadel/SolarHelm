@@ -1,0 +1,16 @@
+{
+  "name": "solarhelm-demo",
+  "private": true,
+  "description": "Remotion project rendering the SolarHelm planner demo video (site/demo.html). Uses the real app/js modules for the data it animates.",
+  "type": "module",
+  "scripts": {
+    "render": "remotion render src/index.jsx Demo out/demo.mp4 --browser-executable=$PLAYWRIGHT_CHROMIUM --codec=h264",
+    "still": "remotion still src/index.jsx Demo out/poster.png --frame=250 --browser-executable=$PLAYWRIGHT_CHROMIUM"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.518",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "^4.0.518"
+  }
+}

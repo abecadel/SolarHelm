@@ -15,6 +15,7 @@ const MIME = {
   '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
   '.json': 'application/json', '.webmanifest': 'application/manifest+json',
   '.svg': 'image/svg+xml', '.css': 'text/css', '.png': 'image/png',
+  '.mp4': 'video/mp4',
 };
 
 const root = join(process.cwd(), '_site');
@@ -49,7 +50,13 @@ const page = await browser.newPage();
 const errors = [];
 const failedUrls = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-page.on('requestfailed', (req) => failedUrls.push(req.url()));
+page.on('requestfailed', (req) => {
+  // Media elements with preload=metadata deliberately abort the stream
+  // once they have the headers — that is not a failure.
+  const err = req.failure()?.errorText ?? '';
+  if (err.includes('ERR_ABORTED')) return;
+  failedUrls.push(`${req.url()} (${err})`);
+});
 page.on('console', (m) => {
   // 'Failed to load resource' from the deliberately blocked forecast API is
   // expected; anything else is a real problem.
@@ -113,6 +120,15 @@ await page.goto(`${base}/install.html`);
 const install = await page.content();
 check(install.includes('SmartShunt') && install.includes('MANUAL'),
       'installation guide renders wiring rules');
+
+// --- Theory + demo pages ---
+await page.goto(`${base}/theory.html`);
+const theory = await page.content();
+check(theory.includes('battery') && theory.includes('deadband'),
+      'theory page renders the control pipeline');
+await page.goto(`${base}/demo.html`);
+const demoVideo = await page.locator('video.demo source').getAttribute('src');
+check(demoVideo === 'assets/demo.mp4', 'demo page embeds the video');
 
 // --- Calculator ---
 await page.goto(`${base}/calculator.html`);
